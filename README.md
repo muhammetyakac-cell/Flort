@@ -22,6 +22,7 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
    - Email: `<admin_kullanici_adi>@flort.local` (otomatik eşlenir, login ekranında email yok)
    - Password: `.env` içindeki `VITE_ADMIN_PASSWORD`
    - User metadata: `{ "username": "<admin_kullanici_adi>" }`
+   - İlk admin girişinde hesap yoksa uygulama `VITE_ADMIN_USERNAME` + `VITE_ADMIN_PASSWORD` ile admin hesabını otomatik oluşturmaya çalışır.
 7. Yerelde çalıştırın:
    - `npm install`
    - `npm run dev`

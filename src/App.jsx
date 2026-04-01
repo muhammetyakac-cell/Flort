@@ -123,14 +123,44 @@ export default function App() {
     const adminEmail = adminLoginEmail();
     const loginEmail = mode === 'admin' ? adminEmail : usernameToEmail(authForm.username);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    let { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: authForm.password,
     });
 
+    if (mode === 'admin' && error?.message?.toLowerCase().includes('invalid login credentials')) {
+      const signUpAttempt = await supabase.auth.signUp({
+        email: adminEmail,
+        password: ADMIN_PASSWORD,
+        options: {
+          data: {
+            username: ADMIN_USERNAME,
+            role: 'admin',
+          },
+        },
+      });
+
+      const signUpMsg = signUpAttempt.error?.message?.toLowerCase() || '';
+      const isAlreadyExists = signUpMsg.includes('already') || signUpMsg.includes('registered');
+
+      if (!signUpAttempt.error || isAlreadyExists) {
+        const retry = await supabase.auth.signInWithPassword({
+          email: adminEmail,
+          password: ADMIN_PASSWORD,
+        });
+        data = retry.data;
+        error = retry.error;
+      }
+    }
+
     setLoading(false);
 
-    if (error) return setStatus(error.message);
+    if (error) {
+      if (mode === 'admin' && error.message?.toLowerCase().includes('email not confirmed')) {
+        return setStatus('Admin hesabı oluşturuldu ancak e-posta doğrulaması açık. Supabase -> Auth -> Email ayarlarında confirm email zorunluluğunu kapat veya admin hesabını doğrula.');
+      }
+      return setStatus(error.message);
+    }
 
     const isAdminAccount = mode === 'admin' ? true : data.user?.user_metadata?.username === ADMIN_USERNAME;
 
