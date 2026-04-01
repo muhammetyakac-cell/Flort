@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from './supabase';
 
-const initialAuth = { email: '', password: '', username: '' };
+const initialAuth = { username: '', password: '' };
 const initialProfile = { name: '', age: '', gender: '', hobbies: '' };
 
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
+const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME;
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+
+function usernameToEmail(username) {
+  return `${username.trim().toLowerCase()}@flort.local`;
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -60,19 +64,26 @@ export default function App() {
 
   async function signUp() {
     if (mode === 'admin') {
-      setStatus('Admin hesabı kayıt ekranından açılamaz. Sadece değişkenlerdeki admin bilgileri ile giriş yapabilirsin.');
+      setStatus('Admin kayıt olamaz. Sadece admin kullanıcı adı + şifre ile giriş yapılır.');
+      return;
+    }
+
+    if (!authForm.username || !authForm.password) {
+      setStatus('Kullanıcı adı ve şifre zorunlu.');
       return;
     }
 
     setLoading(true);
     setStatus('');
 
+    const pseudoEmail = usernameToEmail(authForm.username);
+
     const { error } = await supabase.auth.signUp({
-      email: authForm.email,
+      email: pseudoEmail,
       password: authForm.password,
       options: {
         data: {
-          username: authForm.username,
+          username: authForm.username.trim(),
           role: 'user',
         },
       },
@@ -80,27 +91,34 @@ export default function App() {
 
     setLoading(false);
     if (error) return setStatus(error.message);
-    setStatus('Kayıt başarılı. E-postanı doğrula ve giriş yap.');
+    setStatus('Kayıt başarılı. Kullanıcı adı + şifre ile giriş yapabilirsin.');
   }
 
   async function signIn() {
     setLoading(true);
     setStatus('');
 
+    if (!authForm.username || !authForm.password) {
+      setLoading(false);
+      return setStatus('Kullanıcı adı ve şifre girmen gerekiyor.');
+    }
+
     if (mode === 'admin') {
-      if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+      if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
         setLoading(false);
-        return setStatus('Admin giriş değişkenleri eksik: VITE_ADMIN_EMAIL / VITE_ADMIN_PASSWORD.');
+        return setStatus('Admin değişkenleri eksik: VITE_ADMIN_USERNAME / VITE_ADMIN_PASSWORD.');
       }
 
-      if (authForm.email !== ADMIN_EMAIL || authForm.password !== ADMIN_PASSWORD) {
+      if (authForm.username !== ADMIN_USERNAME || authForm.password !== ADMIN_PASSWORD) {
         setLoading(false);
-        return setStatus('Admin bilgileri hatalı.');
+        return setStatus('Admin kullanıcı adı veya şifre hatalı.');
       }
     }
 
+    const pseudoEmail = usernameToEmail(authForm.username);
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: authForm.email,
+      email: pseudoEmail,
       password: authForm.password,
     });
 
@@ -108,7 +126,7 @@ export default function App() {
 
     if (error) return setStatus(error.message);
 
-    const isAdminAccount = data.user?.email === ADMIN_EMAIL;
+    const isAdminAccount = data.user?.user_metadata?.username === ADMIN_USERNAME;
 
     if (mode === 'admin' && !isAdminAccount) {
       await supabase.auth.signOut();
@@ -218,7 +236,7 @@ export default function App() {
     fetchIncomingThreads();
   }
 
-  const isAdmin = session?.user?.email === ADMIN_EMAIL;
+  const isAdmin = session?.user?.user_metadata?.username === ADMIN_USERNAME;
 
   return (
     <div className="layout">
@@ -239,12 +257,6 @@ export default function App() {
             placeholder="Kullanıcı adı"
             value={authForm.username}
             onChange={(e) => setAuthForm((s) => ({ ...s, username: e.target.value }))}
-            disabled={mode === 'admin'}
-          />
-          <input
-            placeholder="E-posta"
-            value={authForm.email}
-            onChange={(e) => setAuthForm((s) => ({ ...s, email: e.target.value }))}
           />
           <input
             placeholder="Şifre"

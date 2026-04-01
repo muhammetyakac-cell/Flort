@@ -34,8 +34,8 @@ group by m.member_id, vp.id, member_username, vp.name;
 alter table public.virtual_profiles enable row level security;
 alter table public.messages enable row level security;
 
--- Virtual profiles: everybody authenticated can read, only configured admin email can write
--- IMPORTANT: replace admin@example.com with your real admin email
+-- IMPORTANT: replace 'admin' with your real admin username
+
 create policy "virtual_profiles_select_authenticated"
   on public.virtual_profiles for select
   to authenticated
@@ -44,15 +44,14 @@ create policy "virtual_profiles_select_authenticated"
 create policy "virtual_profiles_admin_write"
   on public.virtual_profiles for all
   to authenticated
-  using (auth.email() = 'admin@example.com')
-  with check (auth.email() = 'admin@example.com');
+  using ((auth.jwt() -> 'user_metadata' ->> 'username') = 'admin')
+  with check ((auth.jwt() -> 'user_metadata' ->> 'username') = 'admin');
 
--- Messages: users only their own thread messages; admins can see/respond all
 create policy "messages_member_select_own"
   on public.messages for select
   to authenticated
   using (
-    (auth.email() = 'admin@example.com')
+    ((auth.jwt() -> 'user_metadata' ->> 'username') = 'admin')
     or (member_id = auth.uid())
   );
 
@@ -60,6 +59,6 @@ create policy "messages_insert_member_or_admin"
   on public.messages for insert
   to authenticated
   with check (
-    ((auth.email() = 'admin@example.com') and sender_role = 'virtual')
+    (((auth.jwt() -> 'user_metadata' ->> 'username') = 'admin') and sender_role = 'virtual')
     or ((member_id = auth.uid()) and sender_role = 'member')
   );

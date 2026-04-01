@@ -3,7 +3,7 @@
 Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle** sohbet ettiği bir uygulamadır.
 
 ## Özellikler
-- Kullanıcı kaydı/girişi (username + şifre + email)
+- Kullanıcı kaydı/girişi (yalnızca kullanıcı adı + şifre)
 - Ana sayfada küçük **Admin girişi** linki
 - Üye -> sadece sanal profillere mesaj atabilir
 - Üyeler birbirine mesaj atamaz (veri modelinde user-user kanal yok)
@@ -14,14 +14,16 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
 ## Kurulum
 1. `.env.example` dosyasını `.env` olarak kopyalayın.
 2. Supabase URL ve Anon key bilgilerini girin.
-3. Admin giriş değişkenlerini ayarlayın (`VITE_ADMIN_EMAIL`, `VITE_ADMIN_PASSWORD`).
-4. `supabase/schema.sql` dosyasını SQL Editor'de çalıştırın.
-5. Yerelde çalıştırın:
+3. Admin değişkenlerini ayarlayın (`VITE_ADMIN_USERNAME`, `VITE_ADMIN_PASSWORD`).
+4. `supabase/schema.sql` içindeki `'admin'` ifadesini kendi admin kullanıcı adınızla değiştirin.
+5. `supabase/schema.sql` dosyasını SQL Editor'de çalıştırın.
+6. Admin hesabını Supabase Auth üzerinden manuel açın:
+   - Email: `<admin_kullanici_adi>@flort.local`
+   - Password: `.env` içindeki `VITE_ADMIN_PASSWORD`
+   - User metadata: `{ "username": "<admin_kullanici_adi>" }`
+7. Yerelde çalıştırın:
    - `npm install`
    - `npm run dev`
-
-
-> Not: `supabase/schema.sql` içindeki `admin@example.com` değerini kendi admin e-posta adresinizle değiştirin.
 
 ## Vercel Deploy
 - Framework: **Vite**
@@ -30,6 +32,5 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
 - Environment Variables:
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
-
-## Not
-Admin girişi kayıt ekranından açılmaz. Admin hesabını Supabase Auth üzerinde önceden oluşturup `.env` içindeki `VITE_ADMIN_EMAIL` ve `VITE_ADMIN_PASSWORD` değişkenleriyle birebir eşleştirmeniz gerekir.
+  - `VITE_ADMIN_USERNAME`
+  - `VITE_ADMIN_PASSWORD`
