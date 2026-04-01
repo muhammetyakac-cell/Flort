@@ -14,11 +14,11 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
 ## Kurulum
 1. `.env.example` dosyasını `.env` olarak kopyalayın.
 2. Supabase URL ve Anon key bilgilerini girin.
-3. Admin değişkenlerini ayarlayın (`VITE_ADMIN_USERNAME`, `VITE_ADMIN_PASSWORD`, opsiyonel `VITE_ADMIN_EMAIL`).
+3. Admin değişkenlerini ayarlayın (`VITE_ADMIN_USERNAME`, `VITE_ADMIN_PASSWORD`).
 4. `supabase/schema.sql` içindeki `'admin'` ifadesini kendi admin kullanıcı adınızla değiştirin.
 5. `supabase/schema.sql` dosyasını SQL Editor'de çalıştırın.
 6. Admin hesabını Supabase Auth üzerinden manuel açın:
-   - Email: `VITE_ADMIN_EMAIL` (yoksa `<admin_kullanici_adi>@flort.local`)
+   - Email: `<admin_kullanici_adi>@flort.local` (otomatik eşlenir, login ekranında email yok)
    - Password: `.env` içindeki `VITE_ADMIN_PASSWORD`
    - User metadata: `{ "username": "<admin_kullanici_adi>" }`
 7. Yerelde çalıştırın:
@@ -35,4 +35,3 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
   - `VITE_ADMIN_USERNAME`
   - `VITE_ADMIN_PASSWORD`
 
-  - `VITE_ADMIN_EMAIL` (opsiyonel)

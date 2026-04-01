@@ -6,7 +6,6 @@ const initialProfile = { name: '', age: '', gender: '', hobbies: '' };
 
 const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME;
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 
 function usernameToEmail(username) {
   return `${username.trim().toLowerCase()}@flort.local`;
@@ -116,19 +115,39 @@ export default function App() {
       }
     }
 
-    const adminEmail = ADMIN_EMAIL || usernameToEmail(ADMIN_USERNAME || 'admin');
+    const adminEmail = usernameToEmail(ADMIN_USERNAME || 'admin');
     const loginEmail = mode === 'admin' ? adminEmail : usernameToEmail(authForm.username);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    let { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: authForm.password,
     });
+
+    if (mode === 'admin' && error?.message?.toLowerCase().includes('invalid login credentials')) {
+      await supabase.auth.signUp({
+        email: adminEmail,
+        password: ADMIN_PASSWORD,
+        options: {
+          data: {
+            username: ADMIN_USERNAME,
+            role: 'admin',
+          },
+        },
+      });
+
+      const retry = await supabase.auth.signInWithPassword({
+        email: adminEmail,
+        password: authForm.password,
+      });
+      data = retry.data;
+      error = retry.error;
+    }
 
     setLoading(false);
 
     if (error) return setStatus(error.message);
 
-    const isAdminAccount = data.user?.email === (ADMIN_EMAIL || usernameToEmail(ADMIN_USERNAME || 'admin'));
+    const isAdminAccount = data.user?.user_metadata?.username === ADMIN_USERNAME;
 
     if (mode === 'admin' && !isAdminAccount) {
       await supabase.auth.signOut();
@@ -238,7 +257,7 @@ export default function App() {
     fetchIncomingThreads();
   }
 
-  const isAdmin = session?.user?.email === (ADMIN_EMAIL || usernameToEmail(ADMIN_USERNAME || 'admin'));
+  const isAdmin = session?.user?.user_metadata?.username === ADMIN_USERNAME;
 
   return (
     <div className="layout">
