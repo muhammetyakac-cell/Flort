@@ -6,6 +6,7 @@ const initialProfile = { name: '', age: '', gender: '', hobbies: '' };
 
 const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME;
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 
 function usernameToEmail(username) {
   return `${username.trim().toLowerCase()}@flort.local`;
@@ -109,16 +110,17 @@ export default function App() {
         return setStatus('Admin değişkenleri eksik: VITE_ADMIN_USERNAME / VITE_ADMIN_PASSWORD.');
       }
 
-      if (authForm.username !== ADMIN_USERNAME || authForm.password !== ADMIN_PASSWORD) {
+      if (authForm.username.trim() !== ADMIN_USERNAME || authForm.password !== ADMIN_PASSWORD) {
         setLoading(false);
         return setStatus('Admin kullanıcı adı veya şifre hatalı.');
       }
     }
 
-    const pseudoEmail = usernameToEmail(authForm.username);
+    const adminEmail = ADMIN_EMAIL || usernameToEmail(ADMIN_USERNAME || 'admin');
+    const loginEmail = mode === 'admin' ? adminEmail : usernameToEmail(authForm.username);
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: pseudoEmail,
+      email: loginEmail,
       password: authForm.password,
     });
 
@@ -126,7 +128,7 @@ export default function App() {
 
     if (error) return setStatus(error.message);
 
-    const isAdminAccount = data.user?.user_metadata?.username === ADMIN_USERNAME;
+    const isAdminAccount = data.user?.email === (ADMIN_EMAIL || usernameToEmail(ADMIN_USERNAME || 'admin'));
 
     if (mode === 'admin' && !isAdminAccount) {
       await supabase.auth.signOut();
@@ -236,7 +238,7 @@ export default function App() {
     fetchIncomingThreads();
   }
 
-  const isAdmin = session?.user?.user_metadata?.username === ADMIN_USERNAME;
+  const isAdmin = session?.user?.email === (ADMIN_EMAIL || usernameToEmail(ADMIN_USERNAME || 'admin'));
 
   return (
     <div className="layout">
