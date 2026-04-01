@@ -4,7 +4,6 @@ import { supabase } from './supabase';
 const initialAuth = { username: '', password: '' };
 const initialProfile = { name: '', age: '', gender: '', hobbies: '' };
 
-const ADMIN_USERNAME = import.meta.env.VITE_ADMIN_USERNAME;
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
 function usernameToEmail(username) {
@@ -12,8 +11,7 @@ function usernameToEmail(username) {
 }
 
 function adminLoginEmail() {
-  if (!ADMIN_USERNAME) return usernameToEmail('admin');
-  return ADMIN_USERNAME.includes('@') ? ADMIN_USERNAME.trim().toLowerCase() : usernameToEmail(ADMIN_USERNAME);
+  return 'admin@flort.local';
 }
 
 export default function App() {
@@ -103,21 +101,19 @@ export default function App() {
     setLoading(true);
     setStatus('');
 
-    if (!authForm.username || !authForm.password) {
+    if (mode === 'admin') {
+      if (!ADMIN_PASSWORD) {
+        setLoading(false);
+        return setStatus('Admin değişkeni eksik: VITE_ADMIN_PASSWORD.');
+      }
+
+      if (authForm.password !== ADMIN_PASSWORD) {
+        setLoading(false);
+        return setStatus('Admin şifresi hatalı.');
+      }
+    } else if (!authForm.username || !authForm.password) {
       setLoading(false);
       return setStatus('Kullanıcı adı ve şifre girmen gerekiyor.');
-    }
-
-    if (mode === 'admin') {
-      if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-        setLoading(false);
-        return setStatus('Admin değişkenleri eksik: VITE_ADMIN_USERNAME / VITE_ADMIN_PASSWORD.');
-      }
-
-      if (authForm.username.trim() !== ADMIN_USERNAME || authForm.password !== ADMIN_PASSWORD) {
-        setLoading(false);
-        return setStatus('Admin kullanıcı adı veya şifre hatalı.');
-      }
     }
 
     const adminEmail = adminLoginEmail();
@@ -134,7 +130,7 @@ export default function App() {
         password: ADMIN_PASSWORD,
         options: {
           data: {
-            username: ADMIN_USERNAME,
+            username: 'admin',
             role: 'admin',
           },
         },
@@ -162,7 +158,7 @@ export default function App() {
       return setStatus(error.message);
     }
 
-    const isAdminAccount = mode === 'admin' ? true : data.user?.user_metadata?.username === ADMIN_USERNAME;
+    const isAdminAccount = mode === 'admin' ? true : data.user?.user_metadata?.username === 'admin';
 
     if (mode === 'user' && isAdminAccount) {
       await supabase.auth.signOut();
@@ -285,9 +281,10 @@ export default function App() {
         <section className="card">
           <h2>{mode === 'admin' ? 'Admin girişi' : 'Kullanıcı giriş/kayıt'}</h2>
           <input
-            placeholder="Kullanıcı adı"
-            value={authForm.username}
+            placeholder={mode === 'admin' ? 'Admin için kullanıcı adı boş bırakılacak' : 'Kullanıcı adı'}
+            value={mode === 'admin' ? '' : authForm.username}
             onChange={(e) => setAuthForm((s) => ({ ...s, username: e.target.value }))}
+            disabled={mode === 'admin'}
           />
           <input
             placeholder="Şifre"
