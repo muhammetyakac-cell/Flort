@@ -15,6 +15,7 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
 1. `.env.example` dosyasını `.env` olarak kopyalayın.
 2. Supabase URL ve Anon key bilgilerini girin.
 3. Admin değişkenlerini ayarlayın (`VITE_ADMIN_USERNAME`, `VITE_ADMIN_PASSWORD`).
+   - Eğer Supabase admin hesabını gerçek e-posta ile açtıysan `VITE_ADMIN_USERNAME` değerini e-posta olarak gir (örn: admin@site.com).
 4. `supabase/schema.sql` içindeki `'admin'` ifadesini kendi admin kullanıcı adınızla değiştirin.
 5. `supabase/schema.sql` dosyasını SQL Editor'de çalıştırın.
 6. Admin hesabını Supabase Auth üzerinden manuel açın:

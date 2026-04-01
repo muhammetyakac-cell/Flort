@@ -11,6 +11,11 @@ function usernameToEmail(username) {
   return `${username.trim().toLowerCase()}@flort.local`;
 }
 
+function adminLoginEmail() {
+  if (!ADMIN_USERNAME) return usernameToEmail('admin');
+  return ADMIN_USERNAME.includes('@') ? ADMIN_USERNAME.trim().toLowerCase() : usernameToEmail(ADMIN_USERNAME);
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [mode, setMode] = useState('user');
@@ -115,44 +120,19 @@ export default function App() {
       }
     }
 
-    const adminEmail = usernameToEmail(ADMIN_USERNAME || 'admin');
+    const adminEmail = adminLoginEmail();
     const loginEmail = mode === 'admin' ? adminEmail : usernameToEmail(authForm.username);
 
-    let { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: authForm.password,
     });
-
-    if (mode === 'admin' && error?.message?.toLowerCase().includes('invalid login credentials')) {
-      await supabase.auth.signUp({
-        email: adminEmail,
-        password: ADMIN_PASSWORD,
-        options: {
-          data: {
-            username: ADMIN_USERNAME,
-            role: 'admin',
-          },
-        },
-      });
-
-      const retry = await supabase.auth.signInWithPassword({
-        email: adminEmail,
-        password: authForm.password,
-      });
-      data = retry.data;
-      error = retry.error;
-    }
 
     setLoading(false);
 
     if (error) return setStatus(error.message);
 
-    const isAdminAccount = data.user?.user_metadata?.username === ADMIN_USERNAME;
-
-    if (mode === 'admin' && !isAdminAccount) {
-      await supabase.auth.signOut();
-      return setStatus('Bu hesap admin olarak tanımlı değil.');
-    }
+    const isAdminAccount = mode === 'admin' ? true : data.user?.user_metadata?.username === ADMIN_USERNAME;
 
     if (mode === 'user' && isAdminAccount) {
       await supabase.auth.signOut();
@@ -257,7 +237,7 @@ export default function App() {
     fetchIncomingThreads();
   }
 
-  const isAdmin = session?.user?.user_metadata?.username === ADMIN_USERNAME;
+  const isAdmin = mode === 'admin';
 
   return (
     <div className="layout">
