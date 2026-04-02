@@ -45,6 +45,11 @@ export default function App() {
     return `${memberId}::${profileId}`;
   }
 
+  function formatTime(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  }
+
   function playNotificationSound() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -313,6 +318,14 @@ export default function App() {
 
     if (error) return setStatus(error.message);
     setMessages(data || []);
+
+    await supabase
+      .from('messages')
+      .update({ seen_by_member: true })
+      .eq('virtual_profile_id', profileId)
+      .eq('member_id', memberSession.id)
+      .eq('sender_role', 'virtual')
+      .eq('seen_by_member', false);
   }
 
   async function sendMessage() {
@@ -333,6 +346,8 @@ export default function App() {
       virtual_profile_id: selectedProfileId,
       sender_role: 'member',
       content: newMessage.trim(),
+      seen_by_member: true,
+      seen_by_admin: false,
     });
     if (error) return setStatus(error.message);
     setNewMessage('');
@@ -390,6 +405,14 @@ export default function App() {
 
     if (error) return setStatus(error.message);
     setThreadMessages(data || []);
+
+    await supabase
+      .from('messages')
+      .update({ seen_by_admin: true })
+      .eq('member_id', memberId)
+      .eq('virtual_profile_id', profileId)
+      .eq('sender_role', 'member')
+      .eq('seen_by_admin', false);
   }
 
   async function sendAdminReply() {
@@ -399,6 +422,8 @@ export default function App() {
       virtual_profile_id: selectedThread.virtual_profile_id,
       sender_role: 'virtual',
       content: adminReply.trim(),
+      seen_by_member: false,
+      seen_by_admin: true,
     });
     if (error) return setStatus(error.message);
     setAdminReply('');
@@ -495,10 +520,11 @@ export default function App() {
                 <div key={msg.id} className={`msg ${msg.sender_role}`}>
                   <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>
                   <p>{msg.content}</p>
+                  <small>{formatTime(msg.created_at)}{msg.sender_role === 'virtual' ? ` • ${msg.seen_by_member ? '✓✓ Görüldü' : '✓ Gönderildi'}` : ''}</small>
                 </div>
               ))}
             </div>
-            <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} />
+            <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} />
             <button onClick={sendAdminReply}>Yanıt Gönder</button>
           </section>
         </main>
@@ -528,11 +554,12 @@ export default function App() {
                 <div key={msg.id} className={`msg ${msg.sender_role}`}>
                   <span>{msg.sender_role === 'member' ? 'Sen' : selectedProfile?.name}</span>
                   <p>{msg.content}</p>
+                  <small>{formatTime(msg.created_at)}{msg.sender_role === 'member' ? ` • ${msg.seen_by_admin ? '✓✓ Görüldü' : '✓ Gönderildi'}` : ''}</small>
                 </div>
               ))}
             </div>
             <div className="row">
-              <input placeholder="Mesaj yaz" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
+              <input placeholder="Mesaj yaz" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }} />
               <button onClick={sendMessage}>Gönder</button>
             </div>
           </section>

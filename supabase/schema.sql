@@ -72,8 +72,14 @@ create table if not exists public.messages (
   virtual_profile_id uuid not null references public.virtual_profiles(id) on delete cascade,
   sender_role text not null check (sender_role in ('member', 'virtual')),
   content text not null,
+  seen_by_member boolean not null default false,
+  seen_by_admin boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table if exists public.messages
+  add column if not exists seen_by_member boolean not null default false,
+  add column if not exists seen_by_admin boolean not null default false;
 
 -- Eski şemadan gelen messages.member_id foreign key'ini members tablosuna taşı
 do $$
