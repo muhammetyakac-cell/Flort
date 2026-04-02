@@ -1,25 +1,32 @@
 # Flort Chat (Vite + Supabase)
 
-Bu sürümde **mail/auth bağımlılığı tamamen kaldırıldı**. Admin girişi sadece `VITE_ADMIN_PASSWORD` ile yapılır.
+Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 
 ## Özellikler
 - Kullanıcı kaydı/girişi: sadece kullanıcı adı + şifre
-- Admin girişi: sadece şifre (kullanıcı adı/email yok)
+- Admin girişi: sadece şifre
+- Admin sanal profil oluştururken: ad, yaş, cinsiyet, hobiler + **fotoğraf**
+- Üye giriş yaptıktan sonra kendi profilini düzenler: yaş, hobiler, şehir + **fotoğraf**
 - Üye -> sadece sanal profillere mesaj atabilir
-- Admin paneli: sanal profil oluşturma + tek cevap penceresi
+- Admin paneli: tek cevap penceresi + konuşma geçmişini görme
 
 ## Kurulum
 1. Proje kökündeki `.env` dosyasında şu değişkenleri güncelle:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_ADMIN_PASSWORD`
-2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski `created_by`, `messages_member_id_fkey` ve policy yapılarını migrate eder; güvenle tekrar çalıştırılabilir)
+2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski şemalardan migration + storage bucket/policy kurulumu yapar, tekrar çalıştırılabilir)
 3. Uygulamayı başlat:
    - `npm install`
    - `npm run dev`
 
+## Yeni Migration İçeriği
+- `member_profiles` tablosu
+- `virtual_profiles.photo_url` kolonu
+- `profile-images` storage bucket + policy'ler
+
 ## Önemli Not (Güvenlik)
-Bu sürümde e-mail/auth tamamen kaldırıldığı için `members.password` alanı düz metin olarak tutulur ve anon erişim açıktır. Bu yapı **sadece hızlı prototip/demo** içindir.
+Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon erişim açıktır.
 
 ## Vercel Deploy
 - Framework: **Vite**

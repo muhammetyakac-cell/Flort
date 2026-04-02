@@ -9,12 +9,22 @@ create table if not exists public.members (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.member_profiles (
+  member_id uuid primary key references public.members(id) on delete cascade,
+  age int,
+  hobbies text,
+  city text,
+  photo_url text,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.virtual_profiles (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   age int not null check (age > 0),
   gender text not null,
   hobbies text,
+  photo_url text,
   created_by text not null default 'admin',
   created_at timestamptz not null default now()
 );
@@ -54,7 +64,6 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
-
 -- Eski şemadan gelen messages.member_id foreign key'ini members tablosuna taşı
 do $$
 begin
@@ -64,7 +73,6 @@ begin
   ) then
     alter table public.messages drop constraint if exists messages_member_id_fkey;
 
-    -- Orphan kayıtlar yeni FK'yi bozmasın
     delete from public.messages m
     where not exists (
       select 1 from public.members mb where mb.id = m.member_id
@@ -89,18 +97,24 @@ join public.members mb on mb.id = m.member_id
 group by m.member_id, vp.id, mb.username, vp.name;
 
 alter table public.members enable row level security;
+alter table public.member_profiles enable row level security;
 alter table public.virtual_profiles enable row level security;
 alter table public.messages enable row level security;
 
--- Auth tamamen kaldırıldığı için demo amaçlı anon erişim açık
 -- Politikaları idempotent yapmak için önce varsa sil
-
 drop policy if exists "members_all_anon" on public.members;
+drop policy if exists "member_profiles_all_anon" on public.member_profiles;
 drop policy if exists "virtual_profiles_all_anon" on public.virtual_profiles;
 drop policy if exists "messages_all_anon" on public.messages;
 
 create policy "members_all_anon"
   on public.members for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy "member_profiles_all_anon"
+  on public.member_profiles for all
   to anon, authenticated
   using (true)
   with check (true);
@@ -116,3 +130,28 @@ create policy "messages_all_anon"
   to anon, authenticated
   using (true)
   with check (true);
+
+-- Storage bucket + policy (profil fotoğrafları)
+insert into storage.buckets (id, name, public)
+values ('profile-images', 'profile-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "profile_images_public_read" on storage.objects;
+drop policy if exists "profile_images_anon_insert" on storage.objects;
+drop policy if exists "profile_images_anon_update" on storage.objects;
+
+create policy "profile_images_public_read"
+on storage.objects for select
+to anon, authenticated
+using (bucket_id = 'profile-images');
+
+create policy "profile_images_anon_insert"
+on storage.objects for insert
+to anon, authenticated
+with check (bucket_id = 'profile-images');
+
+create policy "profile_images_anon_update"
+on storage.objects for update
+to anon, authenticated
+using (bucket_id = 'profile-images')
+with check (bucket_id = 'profile-images');

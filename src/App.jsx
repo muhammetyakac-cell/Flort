@@ -4,7 +4,8 @@ import { supabase } from './supabase';
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
 const initialAuth = { username: '', password: '' };
-const initialProfile = { name: '', age: '', gender: '', hobbies: '' };
+const initialProfile = { name: '', age: '', gender: '', hobbies: '', photo_url: '' };
+const initialMemberProfile = { age: '', hobbies: '', city: '', photo_url: '' };
 
 export default function App() {
   const [mode, setMode] = useState('user');
@@ -25,6 +26,7 @@ export default function App() {
   const [selectedThread, setSelectedThread] = useState(null);
   const [adminReply, setAdminReply] = useState('');
   const [threadMessages, setThreadMessages] = useState([]);
+  const [memberProfile, setMemberProfile] = useState(initialMemberProfile);
 
   const selectedProfile = useMemo(
     () => virtualProfiles.find((p) => p.id === selectedProfileId) || null,
@@ -49,6 +51,65 @@ export default function App() {
     if (!isAdmin || !selectedThread) return;
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
   }, [isAdmin, selectedThread]);
+
+
+  useEffect(() => {
+    if (!memberSession || isAdmin) return;
+    fetchOwnProfile();
+  }, [memberSession, isAdmin]);
+
+
+  async function uploadImage(file, folder) {
+    if (!file) return null;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage.from('profile-images').upload(path, file, { upsert: true });
+    if (uploadError) {
+      setStatus(`Görsel yükleme hatası: ${uploadError.message}`);
+      return null;
+    }
+
+    const { data } = supabase.storage.from('profile-images').getPublicUrl(path);
+    return data?.publicUrl || null;
+  }
+
+  async function fetchOwnProfile() {
+    const { data, error } = await supabase
+      .from('member_profiles')
+      .select('*')
+      .eq('member_id', memberSession.id)
+      .maybeSingle();
+
+    if (error) return setStatus(error.message);
+    if (!data) return setMemberProfile(initialMemberProfile);
+
+    setMemberProfile({
+      age: data.age || '',
+      hobbies: data.hobbies || '',
+      city: data.city || '',
+      photo_url: data.photo_url || '',
+    });
+  }
+
+  async function saveOwnProfile() {
+    if (!memberSession) return;
+
+    const payload = {
+      member_id: memberSession.id,
+      age: memberProfile.age ? Number(memberProfile.age) : null,
+      hobbies: memberProfile.hobbies,
+      city: memberProfile.city,
+      photo_url: memberProfile.photo_url,
+    };
+
+    const { error } = await supabase
+      .from('member_profiles')
+      .upsert(payload, { onConflict: 'member_id' });
+
+    if (error) return setStatus(error.message);
+    setStatus('Profil bilgilerin kaydedildi.');
+  }
 
   async function signUp() {
     if (mode === 'admin') return setStatus('Admin kayıt olamaz.');
@@ -169,6 +230,7 @@ export default function App() {
       age: Number(profileForm.age),
       gender: profileForm.gender,
       hobbies: profileForm.hobbies,
+      photo_url: profileForm.photo_url,
     });
     if (error) return setStatus(error.message);
     setProfileForm(initialProfile);
@@ -255,6 +317,16 @@ export default function App() {
             <input placeholder="Yaş" type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
             <input placeholder="Cinsiyet" value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
             <textarea placeholder="Hobiler" value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const url = await uploadImage(file, 'virtual-profiles');
+                if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
+              }}
+            />
             <button onClick={createVirtualProfile}>Kaydet</button>
           </section>
 
@@ -294,6 +366,7 @@ export default function App() {
             ))}
             {selectedProfile && (
               <div className="meta">
+                {selectedProfile.photo_url && <img src={selectedProfile.photo_url} alt={selectedProfile.name} className="profile-photo" />}
                 <p><strong>Yaş:</strong> {selectedProfile.age}</p>
                 <p><strong>Cinsiyet:</strong> {selectedProfile.gender}</p>
                 <p><strong>Hobiler:</strong> {selectedProfile.hobbies || '-'}</p>
@@ -314,6 +387,37 @@ export default function App() {
               <input placeholder="Mesaj yaz" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
               <button onClick={sendMessage}>Gönder</button>
             </div>
+          </section>
+          <section className="card">
+            <h3>Kendi Profilin</h3>
+            {memberProfile.photo_url && <img src={memberProfile.photo_url} alt="profil" className="profile-photo" />}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const url = await uploadImage(file, 'members');
+                if (url) setMemberProfile((s) => ({ ...s, photo_url: url }));
+              }}
+            />
+            <input
+              placeholder="Yaş"
+              type="number"
+              value={memberProfile.age}
+              onChange={(e) => setMemberProfile((s) => ({ ...s, age: e.target.value }))}
+            />
+            <input
+              placeholder="Şehir"
+              value={memberProfile.city}
+              onChange={(e) => setMemberProfile((s) => ({ ...s, city: e.target.value }))}
+            />
+            <textarea
+              placeholder="Hobiler"
+              value={memberProfile.hobbies}
+              onChange={(e) => setMemberProfile((s) => ({ ...s, hobbies: e.target.value }))}
+            />
+            <button onClick={saveOwnProfile}>Profili Kaydet</button>
           </section>
         </main>
       )}

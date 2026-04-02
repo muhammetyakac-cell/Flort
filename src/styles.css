@@ -56,6 +56,10 @@ header h1 {
   grid-template-columns: 1fr 2fr;
 }
 
+.user-grid {
+  grid-template-columns: 1fr 1.6fr 1fr;
+}
+
 .row { display: flex; gap: 10px; }
 
 input,
@@ -159,4 +163,14 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 @media (max-width: 768px) {
   .user-grid,
   .admin-grid { grid-template-columns: 1fr; }
+}
+
+.profile-photo {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #dbeafe;
 }
