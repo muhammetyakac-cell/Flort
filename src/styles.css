@@ -671,3 +671,160 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
     transform: translateY(0) scale(1);
   }
 }
+
+/* --- Compact modern refresh (admin + user) --- */
+.layout {
+  max-width: 1380px;
+  padding: 16px 18px 12px;
+}
+
+header {
+  background: rgba(226, 232, 240, 0.75);
+  border: 1px solid #d5dbe7;
+  border-radius: 18px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+
+header h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+header h1::before {
+  content: '✦';
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #d946ef);
+  box-shadow: 0 10px 20px rgba(99, 102, 241, 0.25);
+}
+
+header > button {
+  width: auto;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #d8e0ec;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 28px;
+  padding: 16px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.admin-modern,
+.user-dashboard {
+  gap: 12px;
+}
+
+.thread-item.modern,
+.profile-item {
+  border-radius: 18px;
+  background: #eef2f8;
+  color: #1e293b;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.thread-item.modern.active,
+.profile-item.active {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #4f46e5);
+}
+
+.thread-item.modern.active small,
+.profile-item.active small,
+.profile-item.active strong {
+  color: #e2e8f0;
+}
+
+.chat-header {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.chat-box {
+  border-radius: 22px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.msg {
+  padding: 12px 14px;
+}
+
+.msg span {
+  font-weight: 700;
+  color: #334155;
+}
+
+.row input,
+textarea {
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+textarea {
+  border-radius: 20px;
+  min-height: 74px;
+}
+
+.row button,
+.admin-center > button:last-child {
+  width: auto;
+  min-width: 110px;
+  border-radius: 999px;
+}
+
+.quick-replies {
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.chip {
+  background: rgba(219, 234, 254, 0.7);
+  border: 1px solid rgba(147, 197, 253, 0.5);
+  border-radius: 999px;
+  padding: 7px 14px;
+}
+
+.chip:nth-child(odd) {
+  background: rgba(251, 207, 232, 0.5);
+  border-color: rgba(244, 114, 182, 0.4);
+}
+
+.meta {
+  background: #f1f5f9;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+}
+
+.profile-photo {
+  border-radius: 28px;
+}
+
+.status {
+  text-align: center;
+  color: #64748b;
+  letter-spacing: 2px;
+  font-size: .82rem;
+}
+
+@media (max-width: 1200px) {
+  header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
