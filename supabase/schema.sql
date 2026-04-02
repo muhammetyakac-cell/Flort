@@ -166,3 +166,45 @@ on storage.objects for update
 to anon, authenticated
 using (bucket_id = 'profile-images')
 with check (bucket_id = 'profile-images');
+
+
+-- Realtime sadece fiziksel tablolar için açılabilir (view için açılamaz)
+do $$
+declare
+  rel_exists boolean;
+begin
+  -- admin_threads bir view olduğu için publication'a eklenmemeli
+  select exists (
+    select 1
+    from pg_publication_rel pr
+    join pg_class c on c.oid = pr.prrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_publication p on p.oid = pr.prpubid
+    where p.pubname = 'supabase_realtime'
+      and n.nspname = 'public'
+      and c.relname = 'admin_threads'
+  ) into rel_exists;
+
+  if rel_exists then
+    execute 'alter publication supabase_realtime drop table public.admin_threads';
+  end if;
+
+  -- messages tablosu publication içinde yoksa ekle
+  select exists (
+    select 1
+    from pg_publication_rel pr
+    join pg_class c on c.oid = pr.prrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_publication p on p.oid = pr.prpubid
+    where p.pubname = 'supabase_realtime'
+      and n.nspname = 'public'
+      and c.relname = 'messages'
+  ) into rel_exists;
+
+  if not rel_exists then
+    execute 'alter publication supabase_realtime add table public.messages';
+  end if;
+exception when undefined_object then
+  -- publication yoksa atla
+  null;
+end $$;
