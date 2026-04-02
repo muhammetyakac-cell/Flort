@@ -46,6 +46,8 @@ export default function App() {
   const [adminDrawerOpen, setAdminDrawerOpen] = useState(true);
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
+  const profileListRef = useRef(null);
+  const threadQueueRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   const selectedProfile = useMemo(
@@ -155,6 +157,16 @@ export default function App() {
     if (!isAdmin || !adminChatBoxRef.current) return;
     adminChatBoxRef.current.scrollTop = adminChatBoxRef.current.scrollHeight;
   }, [threadMessages, isAdmin]);
+
+  useEffect(() => {
+    if (!profileListRef.current) return;
+    profileListRef.current.scrollTop = 0;
+  }, [unreadByProfile]);
+
+  useEffect(() => {
+    if (!threadQueueRef.current || !isAdmin) return;
+    threadQueueRef.current.scrollTop = 0;
+  }, [incomingThreads, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin || !selectedThread) return;
@@ -676,7 +688,7 @@ export default function App() {
             <div className="panel-title-row">
               <h3>Mesaj Bekleyen Thread'ler</h3>
             </div>
-            <div className="thread-queue modern-thread-queue">
+            <div className="thread-queue modern-thread-queue" ref={threadQueueRef}>
               {incomingThreads.map((thread) => {
                 const threadProfile = profileById[thread.virtual_profile_id];
                 return (
@@ -812,7 +824,7 @@ export default function App() {
         <main className="dashboard user-grid user-dashboard">
           <aside className="card">
             <h3>Sanal Profiller</h3>
-            <div className="profile-list">
+            <div className="profile-list" ref={profileListRef}>
               {sortedProfiles.map((profile) => (
                 <button key={profile.id} onClick={() => setSelectedProfileId(profile.id)} className={`profile-item ${selectedProfileId === profile.id ? 'active' : ''} ${unreadByProfile[profile.id] > 0 ? 'has-unread' : ''}`}>
                   <span className={`avatar-wrap ${unreadByProfile[profile.id] > 0 ? 'ringing' : ''}`}>
