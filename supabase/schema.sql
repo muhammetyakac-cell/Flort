@@ -337,3 +337,122 @@ begin
 exception when undefined_object then
   null;
 end $$;
+
+-- Thread metadata / tagging / SLA destek kolonları
+alter table if exists public.admin_threads
+  add column if not exists tag text not null default 'followup' check (tag in ('hot','cold','followup')),
+  add column if not exists is_closed boolean not null default false,
+  add column if not exists first_admin_reply_at timestamptz,
+  add column if not exists last_member_message_at timestamptz,
+  add column if not exists last_admin_message_at timestamptz;
+
+-- Read timestamps (tooltip için)
+alter table if exists public.messages
+  add column if not exists seen_by_member_at timestamptz,
+  add column if not exists seen_by_admin_at timestamptz;
+
+-- Reactions
+create table if not exists public.message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.messages(id) on delete cascade,
+  actor_role text not null check (actor_role in ('member','admin')),
+  emoji text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Thread tags history
+create table if not exists public.thread_tags (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null,
+  virtual_profile_id uuid not null,
+  tag text not null check (tag in ('hot','cold','followup')),
+  changed_by text not null default 'admin',
+  changed_at timestamptz not null default now()
+);
+
+-- Presence snapshots (Active now / last seen)
+create table if not exists public.presence_states (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid,
+  virtual_profile_id uuid,
+  actor_role text not null check (actor_role in ('member','admin')),
+  is_online boolean not null default true,
+  last_seen_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Typing state backend doğrulama
+create table if not exists public.typing_states (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid,
+  virtual_profile_id uuid,
+  actor_role text not null check (actor_role in ('member','admin')),
+  typing boolean not null default false,
+  expires_at timestamptz not null default (now() + interval '2 seconds'),
+  updated_at timestamptz not null default now()
+);
+
+-- Mood timeline
+create table if not exists public.member_mood_history (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null references public.members(id) on delete cascade,
+  status_emoji text not null,
+  created_at timestamptz not null default now()
+);
+
+-- KPI daily metrics
+create table if not exists public.thread_metrics_daily (
+  day date primary key,
+  dau int not null default 0,
+  first_response_seconds_avg numeric,
+  close_rate numeric,
+  ai_suggestion_use_count int not null default 0,
+  ai_suggestion_send_count int not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+-- Admin audit log
+create table if not exists public.admin_actions_log (
+  id uuid primary key default gen_random_uuid(),
+  action text not null,
+  payload jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- Policies (demo açık)
+drop policy if exists "message_reactions_all_anon" on public.message_reactions;
+drop policy if exists "thread_tags_all_anon" on public.thread_tags;
+drop policy if exists "presence_states_all_anon" on public.presence_states;
+drop policy if exists "typing_states_all_anon" on public.typing_states;
+drop policy if exists "member_mood_history_all_anon" on public.member_mood_history;
+drop policy if exists "thread_metrics_daily_all_anon" on public.thread_metrics_daily;
+drop policy if exists "admin_actions_log_all_anon" on public.admin_actions_log;
+
+alter table public.message_reactions enable row level security;
+alter table public.thread_tags enable row level security;
+alter table public.presence_states enable row level security;
+alter table public.typing_states enable row level security;
+alter table public.member_mood_history enable row level security;
+alter table public.thread_metrics_daily enable row level security;
+alter table public.admin_actions_log enable row level security;
+
+create policy "message_reactions_all_anon" on public.message_reactions for all to anon, authenticated using (true) with check (true);
+create policy "thread_tags_all_anon" on public.thread_tags for all to anon, authenticated using (true) with check (true);
+create policy "presence_states_all_anon" on public.presence_states for all to anon, authenticated using (true) with check (true);
+create policy "typing_states_all_anon" on public.typing_states for all to anon, authenticated using (true) with check (true);
+create policy "member_mood_history_all_anon" on public.member_mood_history for all to anon, authenticated using (true) with check (true);
+create policy "thread_metrics_daily_all_anon" on public.thread_metrics_daily for all to anon, authenticated using (true) with check (true);
+create policy "admin_actions_log_all_anon" on public.admin_actions_log for all to anon, authenticated using (true) with check (true);
+
+-- publication'a ekle
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'alter publication supabase_realtime add table public.typing_states';
+  EXCEPTION WHEN duplicate_object THEN NULL; WHEN undefined_object THEN NULL;
+  END;
+  BEGIN
+    EXECUTE 'alter publication supabase_realtime add table public.presence_states';
+  EXCEPTION WHEN duplicate_object THEN NULL; WHEN undefined_object THEN NULL;
+  END;
+END $$;

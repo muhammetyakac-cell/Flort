@@ -44,6 +44,11 @@ export default function App() {
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [adminDrawerOpen, setAdminDrawerOpen] = useState(true);
+  const [selectedThreadKeys, setSelectedThreadKeys] = useState([]);
+  const [moodHistory, setMoodHistory] = useState([]);
+  const [presenceMap, setPresenceMap] = useState({});
+  const [kpi, setKpi] = useState({ dau: 0, avgFirstResponseMin: 0, closeRate: 0, unanswered: 0, aiSendRate: 0 });
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -117,6 +122,26 @@ export default function App() {
     }
   }
 
+
+  function applySlashCommand(value) {
+    const txt = value.trim().toLowerCase();
+    const map = {
+      '/selam': 'Selam 👋 Nasılsın?',
+      '/kahve': 'Bir kahve içelim mi? ☕',
+      '/iyiaksamlar': 'İyi akşamlar ✨ günün nasıl geçti?',
+    };
+    return map[txt] || null;
+  }
+
+  function calcInterestScore(memberHobbies, virtualHobbies) {
+    const a = new Set((memberHobbies || '').toLowerCase().split(/[\s,]+/).filter(Boolean));
+    const b = new Set((virtualHobbies || '').toLowerCase().split(/[\s,]+/).filter(Boolean));
+    if (!a.size || !b.size) return 0;
+    let common = 0;
+    a.forEach((x) => { if (b.has(x)) common += 1; });
+    return Math.min(100, Math.round((common / Math.max(a.size, b.size)) * 100));
+  }
+
   function getAudioUrl(content) {
     const clean = (content || '').trim();
     if (!clean) return null;
@@ -179,6 +204,31 @@ export default function App() {
   }, [memberSession, isAdmin]);
 
   useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && isAdmin) {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!memberSession || isAdmin) return;
+    fetchMoodHistory();
+  }, [memberSession, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unanswered = incomingThreads.filter((t) => t.last_sender_role === 'member' && !t.is_closed).length;
+    const total = incomingThreads.length || 1;
+    const closed = incomingThreads.filter((t) => t.is_closed).length;
+    const avgFirstResponseMin = 0;
+    setKpi((prev) => ({ ...prev, unanswered, closeRate: Math.round((closed / total) * 100), avgFirstResponseMin }));
+  }, [incomingThreads, isAdmin]);
+
+  useEffect(() => {
     if (!loggedIn) return;
 
     const channel = supabase
@@ -233,6 +283,16 @@ export default function App() {
     };
   }, [loggedIn, isAdmin, memberSession, selectedProfileId, selectedThread]);
 
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    fetchPresenceStates();
+    const ch = supabase.channel('presence-states-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presence_states' }, () => fetchPresenceStates())
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [loggedIn]);
+
   useEffect(() => {
     if (!loggedIn) return;
 
@@ -266,6 +326,16 @@ export default function App() {
       supabase.removeChannel(presenceChannel);
     };
   }, [loggedIn, isAdmin, memberSession?.id, virtualProfiles]);
+
+
+  useEffect(() => {
+    if (memberSession && selectedProfileId && !isAdmin) {
+      upsertPresence('member', memberSession.id, selectedProfileId, true);
+    }
+    if (isAdmin && selectedThread) {
+      upsertPresence('admin', selectedThread.member_id, selectedThread.virtual_profile_id, true);
+    }
+  }, [memberSession, selectedProfileId, isAdmin, selectedThread]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -317,6 +387,7 @@ export default function App() {
     const profileId = isAdmin ? selectedThread?.virtual_profile_id : selectedProfileId;
 
     if (memberId && profileId && typingText.trim()) {
+      upsertTypingState(isAdmin ? 'admin' : 'member', memberId, profileId, true);
       typingChannel.track({
         role: isAdmin ? 'admin' : 'member',
         typing: true,
@@ -328,6 +399,7 @@ export default function App() {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(stopTyping, 1300);
     } else {
+      upsertTypingState(isAdmin ? 'admin' : 'member', memberId, profileId, false);
       stopTyping();
     }
 
@@ -336,6 +408,74 @@ export default function App() {
       supabase.removeChannel(typingChannel);
     };
   }, [loggedIn, isAdmin, newMessage, adminReply, selectedProfileId, selectedThread, memberSession]);
+
+
+  async function fetchMoodHistory() {
+    if (!memberSession) return;
+    const { data } = await supabase
+      .from('member_mood_history')
+      .select('*')
+      .eq('member_id', memberSession.id)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    setMoodHistory(data || []);
+  }
+
+  async function updateThreadTag(thread, tag) {
+    const { error } = await supabase
+      .from('admin_threads')
+      .update({ tag })
+      .eq('member_id', thread.member_id)
+      .eq('virtual_profile_id', thread.virtual_profile_id);
+    if (!error) {
+      await supabase.from('thread_tags').insert({
+        member_id: thread.member_id,
+        virtual_profile_id: thread.virtual_profile_id,
+        tag,
+      });
+      fetchIncomingThreads();
+    }
+  }
+
+  async function bulkSendTemplate(templateText) {
+    if (!selectedThreadKeys.length) return;
+    const selected = incomingThreads.filter((t) => selectedThreadKeys.includes(threadKey(t.member_id, t.virtual_profile_id)));
+    for (const thread of selected) {
+      await supabase.from('messages').insert({
+        member_id: thread.member_id,
+        virtual_profile_id: thread.virtual_profile_id,
+        sender_role: 'virtual',
+        content: templateText,
+        seen_by_member: false,
+        seen_by_admin: true,
+      });
+    }
+    await supabase.from('admin_actions_log').insert({ action: 'bulk_template_send', payload: { count: selected.length } });
+    setSelectedThreadKeys([]);
+    fetchIncomingThreads();
+  }
+
+  async function upsertPresence(actorRole, memberId, profileId, isOnline = true) {
+    await supabase.from('presence_states').upsert({
+      actor_role: actorRole,
+      member_id: memberId,
+      virtual_profile_id: profileId,
+      is_online: isOnline,
+      last_seen_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  async function upsertTypingState(actorRole, memberId, profileId, typing) {
+    await supabase.from('typing_states').upsert({
+      actor_role: actorRole,
+      member_id: memberId,
+      virtual_profile_id: profileId,
+      typing,
+      expires_at: new Date(Date.now() + 2000).toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
 
   async function uploadImage(file, folder) {
     if (!file) return null;
@@ -388,6 +528,8 @@ export default function App() {
       .upsert(payload, { onConflict: 'member_id' });
 
     if (error) return setStatus(error.message);
+    await supabase.from('member_mood_history').insert({ member_id: memberSession.id, status_emoji: memberProfile.status_emoji });
+    fetchMoodHistory();
     setStatus('Profil bilgilerin kaydedildi.');
   }
 
@@ -483,7 +625,7 @@ export default function App() {
 
     await supabase
       .from('messages')
-      .update({ seen_by_member: true })
+      .update({ seen_by_member: true, seen_by_member_at: new Date().toISOString() })
       .eq('virtual_profile_id', profileId)
       .eq('member_id', memberSession.id)
       .eq('sender_role', 'virtual')
@@ -492,6 +634,8 @@ export default function App() {
 
   async function sendMessage() {
     if (!memberSession || !selectedProfileId || !newMessage.trim()) return;
+    const slash = applySlashCommand(newMessage);
+    const outgoing = slash || newMessage.trim();
 
     const { data: memberExists } = await supabase
       .from('members')
@@ -507,8 +651,9 @@ export default function App() {
       member_id: memberSession.id,
       virtual_profile_id: selectedProfileId,
       sender_role: 'member',
-      content: newMessage.trim(),
+      content: outgoing,
       seen_by_member: true,
+      seen_by_member_at: new Date().toISOString(),
       seen_by_admin: false,
     });
     if (error) return setStatus(error.message);
@@ -552,6 +697,17 @@ export default function App() {
     setStatus(`Sanal profil oluşturuldu: ${payload.name}, ${payload.city}`);
   }
 
+
+  async function fetchPresenceStates() {
+    const { data } = await supabase.from('presence_states').select('*').order('updated_at', { ascending: false }).limit(200);
+    const map = {};
+    (data || []).forEach((row) => {
+      const key = threadKey(row.member_id || 'none', row.virtual_profile_id || 'none');
+      map[key] = row;
+    });
+    setPresenceMap(map);
+  }
+
   async function fetchIncomingThreads() {
     const { data, error } = await supabase
       .from('admin_threads')
@@ -575,7 +731,7 @@ export default function App() {
 
     await supabase
       .from('messages')
-      .update({ seen_by_admin: true })
+      .update({ seen_by_admin: true, seen_by_admin_at: new Date().toISOString() })
       .eq('member_id', memberId)
       .eq('virtual_profile_id', profileId)
       .eq('sender_role', 'member')
@@ -591,12 +747,14 @@ export default function App() {
       content: adminReply.trim(),
       seen_by_member: false,
       seen_by_admin: true,
+      seen_by_admin_at: new Date().toISOString(),
     });
     if (error) return setStatus(error.message);
     setAdminReply('');
     setAiSuggestions([]);
     fetchIncomingThreads();
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+    await supabase.from('admin_actions_log').insert({ action: 'admin_reply_sent', payload: { has_ai_suggestions: aiSuggestions.length > 0 } });
     setStatus('Yanıt gönderildi.');
   }
 
@@ -638,6 +796,8 @@ export default function App() {
       .filter(Boolean)
       .slice(0, 3);
     setAiSuggestions(lines);
+    setKpi((prev) => ({ ...prev, aiSendRate: prev.aiSendRate }));
+    await supabase.from('admin_actions_log').insert({ action: 'ai_suggestion_generated', payload: { count: lines.length } });
   }
 
   return (
@@ -688,15 +848,28 @@ export default function App() {
             <div className="panel-title-row">
               <h3>Mesaj Bekleyen Thread'ler</h3>
             </div>
+            <div className="bulk-actions">
+              <button type="button" className="chip" onClick={() => bulkSendTemplate('Merhaba! 💫')}>Toplu: Merhaba</button>
+              <button type="button" className="chip" onClick={() => bulkSendTemplate('Naber, günün nasıl geçti?')}>Toplu: Naber</button>
+            </div>
             <div className="thread-queue modern-thread-queue" ref={threadQueueRef}>
               {incomingThreads.map((thread) => {
                 const threadProfile = profileById[thread.virtual_profile_id];
+                const tKey = threadKey(thread.member_id, thread.virtual_profile_id);
                 return (
                   <button
                     key={`${thread.member_id}-${thread.virtual_profile_id}`}
                     onClick={() => setSelectedThread(thread)}
                     className={`thread-item modern ${selectedThread?.member_id === thread.member_id && selectedThread?.virtual_profile_id === thread.virtual_profile_id ? 'active' : ''}`}
                   >
+                    <input
+                      type="checkbox"
+                      checked={selectedThreadKeys.includes(tKey)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setSelectedThreadKeys((prev) => (e.target.checked ? [...prev, tKey] : prev.filter((k) => k !== tKey)));
+                      }}
+                    />
                     <span className="thread-avatar-wrap">
                       {threadProfile?.photo_url ? (
                         <img src={threadProfile.photo_url} alt={thread.virtual_name} className="thread-avatar" />
@@ -707,14 +880,29 @@ export default function App() {
                     <span className="thread-copy">
                       <strong>{thread.member_username} → {thread.virtual_name}</strong>
                       {thread.last_message_content && <small>{thread.last_message_content}</small>}
-                      {adminTypingByThread[threadKey(thread.member_id, thread.virtual_profile_id)] && <small>• yazıyor...</small>}
+                      {adminTypingByThread[tKey] && <small>• yazıyor...</small>}
+                      <small>Etiket: {thread.tag || 'followup'}</small>
                     </span>
-                    {adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)] > 0 && (
-                      <span className="unread-pill">{adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)]}</span>
-                    )}
+                    <select
+                      value={thread.tag || 'followup'}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => updateThreadTag(thread, e.target.value)}
+                    >
+                      <option value="hot">Sıcak lead</option>
+                      <option value="cold">Soğuk</option>
+                      <option value="followup">Takip</option>
+                    </select>
+                    {adminUnreadByThread[tKey] > 0 && <span className="unread-pill">{adminUnreadByThread[tKey]}</span>}
                   </button>
                 );
               })}
+            </div>
+            <div className="meta">
+              <h4>SLA Paneli</h4>
+              <p><strong>Cevaplanmamış:</strong> {kpi.unanswered}</p>
+              <p><strong>Thread kapanma oranı:</strong> %{kpi.closeRate}</p>
+              <p><strong>İlk cevap süresi:</strong> {kpi.avgFirstResponseMin} dk</p>
+              <p><strong>DAU:</strong> {kpi.dau}</p>
             </div>
           </aside>
 
@@ -722,7 +910,7 @@ export default function App() {
             <div className="chat-header">
               <div>
                 <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
-                <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
+                <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Active now' : `Last seen: ${formatTime(presenceMap[threadKey(selectedThread?.member_id || 'none', selectedThread?.virtual_profile_id || 'none')]?.last_seen_at) || '-'}`}</small>
               </div>
               <button type="button" className="drawer-toggle" onClick={() => setAdminDrawerOpen((v) => !v)}>
                 {adminDrawerOpen ? 'Paneli Gizle' : 'Paneli Aç'}
@@ -738,7 +926,7 @@ export default function App() {
                     {audioUrl ? <audio controls src={audioUrl} className="audio-player" /> : <p>{msg.content}</p>}
                     <small>
                       {formatTime(msg.created_at)}
-                      {msg.sender_role === 'virtual' ? <span className={`ticks ${msg.seen_by_member ? 'seen' : ''}`}>✓✓</span> : ''}
+                      {msg.sender_role === 'virtual' ? <span className={`ticks ${msg.seen_by_member ? 'seen' : ''}`} title={`Teslim: ${formatTime(msg.created_at)} | Görüldü: ${formatTime(msg.seen_by_member_at) || '-'}`}>✓✓</span> : ''}
                     </small>
                   </div>
                 );
@@ -846,6 +1034,7 @@ export default function App() {
                 <p><strong>Cinsiyet:</strong> {selectedProfile.gender}</p>
                 <p><strong>Şehir:</strong> {selectedProfile.city || '-'}</p>
                 <p><strong>Hobiler:</strong> {selectedProfile.hobbies || '-'}</p>
+                <p><strong>Ortak ilgi skoru:</strong> %{calcInterestScore(memberProfile.hobbies, selectedProfile.hobbies)}</p>
               </div>
             )}
           </aside>
@@ -860,7 +1049,7 @@ export default function App() {
                     {audioUrl ? <audio controls src={audioUrl} className="audio-player" /> : <p>{msg.content}</p>}
                     <small>
                       {formatTime(msg.created_at)}
-                      {msg.sender_role === 'member' ? <span className={`ticks ${msg.seen_by_admin ? 'seen' : ''}`}>✓✓</span> : ''}
+                      {msg.sender_role === 'member' ? <span className={`ticks ${msg.seen_by_admin ? 'seen' : ''}`} title={`Teslim: ${formatTime(msg.created_at)} | Görüldü: ${formatTime(msg.seen_by_admin_at) || '-'}`}>✓✓</span> : ''}
                     </small>
                   </div>
                 );
@@ -909,8 +1098,26 @@ export default function App() {
               <option value="🌙">🌙 Dinleniyor</option>
             </select>
             <button onClick={saveOwnProfile}>Profili Kaydet</button>
+            <div className="meta">
+              <h4>Mood Timeline</h4>
+              {(moodHistory || []).map((m) => (
+                <small key={m.id}>{m.status_emoji} • {formatTime(m.created_at)}</small>
+              ))}
+            </div>
           </section>
         </main>
+      )}
+
+
+      {commandPaletteOpen && isAdmin && (
+        <div className="command-palette">
+          <div className="card">
+            <h3>Komut Paleti (⌘K)</h3>
+            <button onClick={() => { setAdminReply('Merhaba! 🌸'); setCommandPaletteOpen(false); }}>Template: Merhaba</button>
+            <button onClick={() => { setAdminReply('Naber, günün nasıl geçti?'); setCommandPaletteOpen(false); }}>Template: Naber</button>
+            <button onClick={() => { if (selectedThread) updateThreadTag(selectedThread, 'hot'); setCommandPaletteOpen(false); }}>Etiket: Sıcak Lead</button>
+          </div>
+        </div>
       )}
 
       {status && <p className="status">{status}</p>}
