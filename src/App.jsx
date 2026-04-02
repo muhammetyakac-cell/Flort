@@ -242,7 +242,7 @@ export default function App() {
       });
       error = retry.error;
       if (!error) {
-        setStatus('Profil kaydedildi. Fotoğraf kolonu henüz migration almadığı için görsel eklenmedi. SQL migration'ı tekrar çalıştır.');
+        setStatus("Profil kaydedildi. Fotoğraf kolonu henüz migration almadığı için görsel eklenmedi. SQL migration'ı tekrar çalıştır.");
       }
     }
 
