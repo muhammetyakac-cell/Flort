@@ -24,6 +24,7 @@ export default function App() {
   const [incomingThreads, setIncomingThreads] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [adminReply, setAdminReply] = useState('');
+  const [threadMessages, setThreadMessages] = useState([]);
 
   const selectedProfile = useMemo(
     () => virtualProfiles.find((p) => p.id === selectedProfileId) || null,
@@ -42,6 +43,12 @@ export default function App() {
     if (!memberSession || !selectedProfileId || isAdmin) return;
     fetchMessages(selectedProfileId);
   }, [memberSession, selectedProfileId, isAdmin]);
+
+
+  useEffect(() => {
+    if (!isAdmin || !selectedThread) return;
+    fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+  }, [isAdmin, selectedThread]);
 
   async function signUp() {
     if (mode === 'admin') return setStatus('Admin kayıt olamaz.');
@@ -180,6 +187,19 @@ export default function App() {
     if (!selectedThread && data?.length) setSelectedThread(data[0]);
   }
 
+
+  async function fetchThreadMessages(memberId, profileId) {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('member_id', memberId)
+      .eq('virtual_profile_id', profileId)
+      .order('created_at', { ascending: true });
+
+    if (error) return setStatus(error.message);
+    setThreadMessages(data || []);
+  }
+
   async function sendAdminReply() {
     if (!selectedThread || !adminReply.trim()) return;
     const { error } = await supabase.from('messages').insert({
@@ -191,6 +211,7 @@ export default function App() {
     if (error) return setStatus(error.message);
     setAdminReply('');
     fetchIncomingThreads();
+    fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
     setStatus('Yanıt gönderildi.');
   }
 
@@ -248,6 +269,14 @@ export default function App() {
                 >
                   {thread.member_username} → {thread.virtual_name}
                 </button>
+              ))}
+            </div>
+            <div className="chat-box">
+              {threadMessages.map((msg) => (
+                <div key={msg.id} className={`msg ${msg.sender_role}`}>
+                  <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>
+                  <p>{msg.content}</p>
+                </div>
               ))}
             </div>
             <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} />
