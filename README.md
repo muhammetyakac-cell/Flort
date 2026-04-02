@@ -10,15 +10,19 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - Üye -> sadece sanal profillere mesaj atabilir
 - Admin paneli: tek cevap penceresi + konuşma geçmişini görme
 - Mesajlar admin ve üyede **realtime** güncellenir
-- Mesaj saatleri (HH:mm), Enter ile gönderme ve görüldü işareti (✓ / ✓✓) desteklenir
-- Admin cevabı geldiğinde kullanıcı tarafında **Yeni** etiketi + bildirim sesi çalar
-- Admin panelde de yeni üye mesajları için **Yeni** etiketi ve otomatik en alta scroll vardır
+- Mesaj balonlarında kuyruk, yumuşak slide-in animasyonu ve WhatsApp tarzı mavi tik görüldü ikonları
+- Supabase Presence ile canlılık: admin yazıyor göstergesi + profil bazlı online yeşil nokta
+- Profil listesinde yeni mesaj gelen avatarlarda dönen gradient ring (story efekti)
+- Admin için hızlı yanıt chip'leri ve opsiyonel AI öneri butonu (`VITE_OPENAI_API_KEY`)
+- Mesaj içeriği `audio:https://...mp3` veya direkt ses URL'si ise chat içinde audio player görünür
+- Admin panelde tek tuşla rastgele kadın profil taslağı (250 modern isim havuzu + şehir + yaş)
 
 ## Kurulum
 1. Proje kökündeki `.env` dosyasında şu değişkenleri güncelle:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_ADMIN_PASSWORD`
+   - `VITE_OPENAI_API_KEY` (opsiyonel, AI önerileri için)
 2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski şemalardan migration + storage bucket/policy kurulumu yapar, tekrar çalıştırılabilir)
 3. Uygulamayı başlat:
    - `npm install`
@@ -28,7 +32,8 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 
 ## Yeni Migration İçeriği
 - `member_profiles` tablosu
-- `virtual_profiles.photo_url` kolonu
+- `virtual_profiles.photo_url` + `virtual_profiles.city` kolonları
+- `member_profiles.status_emoji` kolonu
 - `profile-images` storage bucket + policy'ler
 
 ## Önemli Not (Güvenlik)
@@ -42,6 +47,7 @@ Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon e
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
   - `VITE_ADMIN_PASSWORD`
+   - `VITE_OPENAI_API_KEY` (opsiyonel, AI önerileri için)
 
 
 ## Realtime Notu

@@ -15,6 +15,7 @@ create table if not exists public.member_profiles (
   hobbies text,
   city text,
   photo_url text,
+  status_emoji text not null default '🙂',
   updated_at timestamptz not null default now()
 );
 
@@ -24,6 +25,7 @@ create table if not exists public.virtual_profiles (
   age int not null check (age > 0),
   gender text not null,
   hobbies text,
+  city text,
   photo_url text,
   created_by text not null default 'admin',
   created_at timestamptz not null default now()
@@ -32,13 +34,15 @@ create table if not exists public.virtual_profiles (
 
 -- Eski tabloda eksik kolonları tamamla
 alter table if exists public.virtual_profiles
-  add column if not exists photo_url text;
+  add column if not exists photo_url text,
+  add column if not exists city text;
 
 alter table if exists public.member_profiles
   add column if not exists photo_url text,
   add column if not exists city text,
   add column if not exists hobbies text,
-  add column if not exists age int;
+  add column if not exists age int,
+  add column if not exists status_emoji text not null default '🙂';
 
 -- Eski şemadan gelen created_by uuid kolonunu text'e çevir (çakışmasız migration)
 do $$
