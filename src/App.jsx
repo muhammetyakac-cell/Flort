@@ -3,21 +3,12 @@ import { supabase } from './supabase';
 
 const initialAuth = { username: '', password: '' };
 const initialProfile = { name: '', age: '', gender: '', hobbies: '' };
-
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 
-function usernameToEmail(username) {
-  return `${username.trim().toLowerCase()}@flort.local`;
-}
-
-function adminLoginEmail() {
-  return 'admin@flort.local';
-}
-
 export default function App() {
-  const [session, setSession] = useState(null);
   const [mode, setMode] = useState('user');
   const [authForm, setAuthForm] = useState(initialAuth);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -37,64 +28,33 @@ export default function App() {
   );
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!session?.user) return;
-
-    if (mode === 'admin') {
-      fetchVirtualProfiles();
-      fetchIncomingThreads();
-      return;
-    }
-
+    if (!currentUser) return;
     fetchVirtualProfiles();
-  }, [session, mode]);
+    if (currentUser.role === 'admin') fetchIncomingThreads();
+  }, [currentUser]);
 
   useEffect(() => {
-    if (!selectedProfileId || !session?.user || mode !== 'user') return;
+    if (!selectedProfileId || !currentUser || currentUser.role !== 'member') return;
     fetchMessages(selectedProfileId);
-  }, [selectedProfileId, session, mode]);
+  }, [selectedProfileId, currentUser]);
 
   async function signUp() {
-    if (mode === 'admin') {
-      setStatus('Admin kayıt olamaz. Sadece admin kullanıcı adı + şifre ile giriş yapılır.');
-      return;
-    }
+    if (!authForm.username || !authForm.password) return setStatus('Kullanıcı adı ve şifre zorunlu.');
 
-    if (!authForm.username || !authForm.password) {
-      setStatus('Kullanıcı adı ve şifre zorunlu.');
-      return;
-    }
+    if (mode === 'admin') return setStatus('Admin kayıt olamaz.');
 
     setLoading(true);
     setStatus('');
 
-    const pseudoEmail = usernameToEmail(authForm.username);
-
-    const { error } = await supabase.auth.signUp({
-      email: pseudoEmail,
+    const { error } = await supabase.from('app_users').insert({
+      username: authForm.username.trim(),
       password: authForm.password,
-      options: {
-        data: {
-          username: authForm.username.trim(),
-          role: 'user',
-        },
-      },
+      role: 'member',
     });
 
     setLoading(false);
     if (error) return setStatus(error.message);
-    setStatus('Kayıt başarılı. Kullanıcı adı + şifre ile giriş yapabilirsin.');
+    setStatus('Kayıt başarılı.');
   }
 
   async function signIn() {
@@ -104,75 +64,68 @@ export default function App() {
     if (mode === 'admin') {
       if (!ADMIN_PASSWORD) {
         setLoading(false);
-        return setStatus('Admin değişkeni eksik: VITE_ADMIN_PASSWORD.');
+        return setStatus('VITE_ADMIN_PASSWORD eksik.');
       }
-
       if (authForm.password !== ADMIN_PASSWORD) {
         setLoading(false);
         return setStatus('Admin şifresi hatalı.');
       }
-    } else if (!authForm.username || !authForm.password) {
-      setLoading(false);
-      return setStatus('Kullanıcı adı ve şifre girmen gerekiyor.');
-    }
 
-    const adminEmail = adminLoginEmail();
-    const loginEmail = mode === 'admin' ? adminEmail : usernameToEmail(authForm.username);
+      const { data: existingAdmin } = await supabase
+        .from('app_users')
+        .select('*')
+        .eq('role', 'admin')
+        .limit(1)
+        .maybeSingle();
 
-    let { data, error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
-      password: authForm.password,
-    });
-
-    if (mode === 'admin' && error?.message?.toLowerCase().includes('invalid login credentials')) {
-      const signUpAttempt = await supabase.auth.signUp({
-        email: adminEmail,
-        password: ADMIN_PASSWORD,
-        options: {
-          data: {
-            username: 'admin',
-            role: 'admin',
-          },
-        },
-      });
-
-      const signUpMsg = signUpAttempt.error?.message?.toLowerCase() || '';
-      const isAlreadyExists = signUpMsg.includes('already') || signUpMsg.includes('registered');
-
-      if (signUpAttempt.error && !isAlreadyExists) {
-        setLoading(false);
-        return setStatus(`Admin hesabı otomatik oluşturulamadı: ${signUpAttempt.error.message}`);
+      if (!existingAdmin) {
+        const { error: createError } = await supabase.from('app_users').insert({
+          username: 'admin',
+          password: ADMIN_PASSWORD,
+          role: 'admin',
+        });
+        if (createError) {
+          setLoading(false);
+          return setStatus(`Admin hesabı oluşturulamadı: ${createError.message}`);
+        }
       }
 
-      const retry = await supabase.auth.signInWithPassword({
-        email: adminEmail,
-        password: ADMIN_PASSWORD,
-      });
-      data = retry.data;
-      error = retry.error;
+      const { data: adminUser, error: adminError } = await supabase
+        .from('app_users')
+        .select('*')
+        .eq('role', 'admin')
+        .eq('password', ADMIN_PASSWORD)
+        .limit(1)
+        .single();
+
+      setLoading(false);
+      if (adminError) return setStatus(adminError.message);
+      setCurrentUser(adminUser);
+      return setStatus('Admin girişi başarılı.');
     }
+
+    if (!authForm.username || !authForm.password) {
+      setLoading(false);
+      return setStatus('Kullanıcı adı ve şifre zorunlu.');
+    }
+
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('username', authForm.username.trim())
+      .eq('password', authForm.password)
+      .eq('role', 'member')
+      .limit(1)
+      .single();
 
     setLoading(false);
-
-    if (error) {
-      if (mode === 'admin' && error.message?.toLowerCase().includes('email not confirmed')) {
-        return setStatus('Admin hesabı oluşturuldu ancak e-posta doğrulaması açık. Supabase -> Auth -> Email ayarlarında confirm email zorunluluğunu kapat veya admin hesabını doğrula.');
-      }
-      return setStatus(`Supabase login hatası: ${error.message}. Admin email sabit olarak ${adminEmail} kullanılıyor.`);
-    }
-
-    const isAdminAccount = mode === 'admin' ? true : data.user?.user_metadata?.username === 'admin';
-
-    if (mode === 'user' && isAdminAccount) {
-      await supabase.auth.signOut();
-      return setStatus('Admin hesabı kullanıcı girişinden açılamaz.');
-    }
-
+    if (error) return setStatus('Kullanıcı adı veya şifre hatalı.');
+    setCurrentUser(data);
     setStatus('Giriş başarılı.');
   }
 
-  async function signOut() {
-    await supabase.auth.signOut();
+  function signOut() {
+    setCurrentUser(null);
     setSelectedProfileId(null);
     setMessages([]);
     setIncomingThreads([]);
@@ -181,11 +134,7 @@ export default function App() {
   }
 
   async function fetchVirtualProfiles() {
-    const { data, error } = await supabase
-      .from('virtual_profiles')
-      .select('*')
-      .order('created_at', { ascending: true });
-
+    const { data, error } = await supabase.from('virtual_profiles').select('*').order('created_at', { ascending: true });
     if (error) return setStatus(error.message);
     setVirtualProfiles(data || []);
     if (!selectedProfileId && data?.length) setSelectedProfileId(data[0].id);
@@ -196,7 +145,7 @@ export default function App() {
       .from('messages')
       .select('*')
       .eq('virtual_profile_id', profileId)
-      .eq('member_id', session.user.id)
+      .eq('member_id', currentUser.id)
       .order('created_at', { ascending: true });
 
     if (error) return setStatus(error.message);
@@ -207,7 +156,7 @@ export default function App() {
     if (!newMessage.trim() || !selectedProfileId) return;
 
     const { error } = await supabase.from('messages').insert({
-      member_id: session.user.id,
+      member_id: currentUser.id,
       virtual_profile_id: selectedProfileId,
       sender_role: 'member',
       content: newMessage.trim(),
@@ -219,32 +168,25 @@ export default function App() {
   }
 
   async function createVirtualProfile() {
-    if (!profileForm.name || !profileForm.age || !profileForm.gender) {
-      return setStatus('İsim, yaş ve cinsiyet zorunlu.');
-    }
+    if (!profileForm.name || !profileForm.age || !profileForm.gender) return setStatus('İsim, yaş, cinsiyet zorunlu.');
 
     const { error } = await supabase.from('virtual_profiles').insert({
       name: profileForm.name,
       age: Number(profileForm.age),
       gender: profileForm.gender,
       hobbies: profileForm.hobbies,
-      created_by: session.user.id,
+      created_by: currentUser.id,
     });
 
     if (error) return setStatus(error.message);
-
     setProfileForm(initialProfile);
-    setStatus('Sanal profil oluşturuldu.');
     fetchVirtualProfiles();
     fetchIncomingThreads();
+    setStatus('Sanal profil oluşturuldu.');
   }
 
   async function fetchIncomingThreads() {
-    const { data, error } = await supabase
-      .from('admin_threads')
-      .select('*')
-      .order('last_message_at', { ascending: true });
-
+    const { data, error } = await supabase.from('admin_threads').select('*').order('last_message_at', { ascending: true });
     if (error) return setStatus(error.message);
     setIncomingThreads(data || []);
     if (!selectedThread && data?.length) setSelectedThread(data[0]);
@@ -262,25 +204,25 @@ export default function App() {
 
     if (error) return setStatus(error.message);
     setAdminReply('');
-    setStatus('Yanıt gönderildi.');
     fetchIncomingThreads();
+    setStatus('Yanıt gönderildi.');
   }
 
-  const isAdmin = mode === 'admin';
+  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <div className="layout">
       <header>
         <h1>Flort Chat</h1>
-        {!session && (
+        {!currentUser && (
           <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
             {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
           </button>
         )}
-        {session && <button onClick={signOut}>Çıkış</button>}
+        {currentUser && <button onClick={signOut}>Çıkış</button>}
       </header>
 
-      {!session ? (
+      {!currentUser ? (
         <section className="card">
           <h2>{mode === 'admin' ? 'Admin girişi' : 'Kullanıcı giriş/kayıt'}</h2>
           <input
@@ -297,36 +239,17 @@ export default function App() {
           />
           <div className="row">
             <button disabled={loading} onClick={signIn}>Giriş yap</button>
-            {mode !== 'admin' && (
-              <button disabled={loading} onClick={signUp}>Kayıt ol</button>
-            )}
+            {mode !== 'admin' && <button disabled={loading} onClick={signUp}>Kayıt ol</button>}
           </div>
         </section>
       ) : isAdmin ? (
         <main className="admin-grid">
           <section className="card">
             <h3>Sanal Profil Oluştur</h3>
-            <input
-              placeholder="Ad"
-              value={profileForm.name}
-              onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))}
-            />
-            <input
-              placeholder="Yaş"
-              type="number"
-              value={profileForm.age}
-              onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))}
-            />
-            <input
-              placeholder="Cinsiyet"
-              value={profileForm.gender}
-              onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))}
-            />
-            <textarea
-              placeholder="Hobiler"
-              value={profileForm.hobbies}
-              onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))}
-            />
+            <input placeholder="Ad" value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
+            <input placeholder="Yaş" type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
+            <input placeholder="Cinsiyet" value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
+            <textarea placeholder="Hobiler" value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
             <button onClick={createVirtualProfile}>Kaydet</button>
           </section>
 
@@ -334,25 +257,12 @@ export default function App() {
             <h3>Mesajlara Cevap Penceresi</h3>
             <div className="thread-list">
               {incomingThreads.map((thread) => (
-                <button
-                  key={`${thread.member_id}-${thread.virtual_profile_id}`}
-                  onClick={() => setSelectedThread(thread)}
-                  className={
-                    selectedThread?.member_id === thread.member_id &&
-                    selectedThread?.virtual_profile_id === thread.virtual_profile_id
-                      ? 'active'
-                      : ''
-                  }
-                >
+                <button key={`${thread.member_id}-${thread.virtual_profile_id}`} onClick={() => setSelectedThread(thread)}>
                   {thread.member_username} → {thread.virtual_name}
                 </button>
               ))}
             </div>
-            <textarea
-              placeholder="Sanal profil cevabı"
-              value={adminReply}
-              onChange={(e) => setAdminReply(e.target.value)}
-            />
+            <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} />
             <button onClick={sendAdminReply}>Yanıt Gönder</button>
           </section>
         </main>
@@ -361,11 +271,7 @@ export default function App() {
           <aside className="card">
             <h3>Sanal Profiller</h3>
             {virtualProfiles.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => setSelectedProfileId(profile.id)}
-                className={selectedProfileId === profile.id ? 'active' : ''}
-              >
+              <button key={profile.id} onClick={() => setSelectedProfileId(profile.id)} className={selectedProfileId === profile.id ? 'active' : ''}>
                 {profile.name}
               </button>
             ))}
@@ -388,11 +294,7 @@ export default function App() {
               ))}
             </div>
             <div className="row">
-              <input
-                placeholder="Mesaj yaz"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-              />
+              <input placeholder="Mesaj yaz" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
               <button onClick={sendMessage}>Gönder</button>
             </div>
           </section>
