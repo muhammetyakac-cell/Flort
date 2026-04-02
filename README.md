@@ -12,17 +12,15 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
   - Mesajlara tek pencereden sırayla cevap verme
 
 ## Kurulum
-1. `.env.example` dosyasını `.env` olarak kopyalayın.
-2. Supabase URL ve Anon key bilgilerini girin.
-3. Admin şifresini ayarlayın (`VITE_ADMIN_PASSWORD`).
-4. `supabase/schema.sql` içindeki `'admin'` ifadesini kendi admin kullanıcı adınızla değiştirin.
-5. `supabase/schema.sql` dosyasını SQL Editor'de çalıştırın.
-6. Admin hesabını Supabase Auth üzerinden manuel açın:
+1. Proje kökünde `.env` dosyası hazır gelir. `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` ve `VITE_ADMIN_PASSWORD` değerlerini gerçek bilgilerinizle güncelleyin.
+2. `supabase/schema.sql` içindeki `'admin'` ifadesini kendi admin kullanıcı adınızla değiştirin.
+3. `supabase/schema.sql` dosyasını SQL Editor'de çalıştırın.
+4. Admin hesabını Supabase Auth üzerinden manuel açın:
    - Email: `admin@flort.local`
    - Password: `.env` içindeki `VITE_ADMIN_PASSWORD`
    - User metadata: `{ "username": "admin" }`
    - İlk admin girişinde hesap yoksa uygulama `admin@flort.local` + `VITE_ADMIN_PASSWORD` ile admin hesabını otomatik oluşturmaya çalışır.
-7. Yerelde çalıştırın:
+5. Yerelde çalıştırın:
    - `npm install`
    - `npm run dev`
 
