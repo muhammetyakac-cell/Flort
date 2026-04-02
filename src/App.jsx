@@ -767,7 +767,18 @@ export default function App() {
 
           {adminDrawerOpen && (
             <aside className="admin-right card drawer-panel">
-              <div className="panel-title-row">
+              {selectedThreadProfile && (
+                <div className="meta selected-profile-meta">
+                  <h4>Seçili Profil Bilgileri</h4>
+                  {selectedThreadProfile.photo_url && <img src={selectedThreadProfile.photo_url} alt={selectedThreadProfile.name} className="profile-photo" />}
+                  <p><strong>Ad:</strong> {selectedThreadProfile.name}</p>
+                  <p><strong>Yaş:</strong> {selectedThreadProfile.age}</p>
+                  <p><strong>Şehir:</strong> {selectedThreadProfile.city || '-'}</p>
+                  <p><strong>Hobiler:</strong> {selectedThreadProfile.hobbies || '-'}</p>
+                </div>
+              )}
+
+              <div className="panel-title-row form-title-row">
                 <h3>Sanal Profil Oluştur</h3>
                 <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
               </div>
@@ -806,17 +817,6 @@ export default function App() {
               {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
 
               <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
-
-              {selectedThreadProfile && (
-                <div className="meta">
-                  <h4>Seçili Profil Bilgileri</h4>
-                  {selectedThreadProfile.photo_url && <img src={selectedThreadProfile.photo_url} alt={selectedThreadProfile.name} className="profile-photo" />}
-                  <p><strong>Ad:</strong> {selectedThreadProfile.name}</p>
-                  <p><strong>Yaş:</strong> {selectedThreadProfile.age}</p>
-                  <p><strong>Şehir:</strong> {selectedThreadProfile.city || '-'}</p>
-                  <p><strong>Hobiler:</strong> {selectedThreadProfile.hobbies || '-'}</p>
-                </div>
-              )}
             </aside>
           )}
         </main>
