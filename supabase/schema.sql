@@ -96,16 +96,33 @@ begin
 end $$;
 
 create or replace view public.admin_threads as
+with ranked as (
+  select
+    m.member_id,
+    vp.id as virtual_profile_id,
+    mb.username as member_username,
+    vp.name as virtual_name,
+    m.content as last_message_content,
+    m.sender_role as last_sender_role,
+    m.created_at as last_message_at,
+    row_number() over (
+      partition by m.member_id, vp.id
+      order by m.created_at desc
+    ) as rn
+  from public.messages m
+  join public.virtual_profiles vp on vp.id = m.virtual_profile_id
+  join public.members mb on mb.id = m.member_id
+)
 select
-  m.member_id,
-  vp.id as virtual_profile_id,
-  mb.username as member_username,
-  vp.name as virtual_name,
-  max(m.created_at) as last_message_at
-from public.messages m
-join public.virtual_profiles vp on vp.id = m.virtual_profile_id
-join public.members mb on mb.id = m.member_id
-group by m.member_id, vp.id, mb.username, vp.name;
+  member_id,
+  virtual_profile_id,
+  member_username,
+  virtual_name,
+  last_message_content,
+  last_sender_role,
+  last_message_at
+from ranked
+where rn = 1;
 
 alter table public.members enable row level security;
 alter table public.member_profiles enable row level security;

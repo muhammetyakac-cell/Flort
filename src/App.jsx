@@ -28,7 +28,9 @@ export default function App() {
   const [threadMessages, setThreadMessages] = useState([]);
   const [memberProfile, setMemberProfile] = useState(initialMemberProfile);
   const [unreadByProfile, setUnreadByProfile] = useState({});
+  const [adminUnreadByThread, setAdminUnreadByThread] = useState({});
   const chatBoxRef = useRef(null);
+  const adminChatBoxRef = useRef(null);
 
   const selectedProfile = useMemo(
     () => virtualProfiles.find((p) => p.id === selectedProfileId) || null,
@@ -37,6 +39,11 @@ export default function App() {
 
   const loggedIn = !!memberSession || isAdmin;
 
+
+
+  function threadKey(memberId, profileId) {
+    return `${memberId}::${profileId}`;
+  }
 
   function playNotificationSound() {
     try {
@@ -79,11 +86,24 @@ export default function App() {
     setUnreadByProfile((prev) => ({ ...prev, [selectedProfileId]: 0 }));
   }, [selectedProfileId, isAdmin]);
 
+
+  useEffect(() => {
+    if (!isAdmin || !selectedThread) return;
+    const key = threadKey(selectedThread.member_id, selectedThread.virtual_profile_id);
+    setAdminUnreadByThread((prev) => ({ ...prev, [key]: 0 }));
+  }, [isAdmin, selectedThread]);
+
   useEffect(() => {
     if (!memberSession || isAdmin) return;
     if (!chatBoxRef.current) return;
     chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
   }, [messages, memberSession, isAdmin]);
+
+
+  useEffect(() => {
+    if (!isAdmin || !adminChatBoxRef.current) return;
+    adminChatBoxRef.current.scrollTop = adminChatBoxRef.current.scrollHeight;
+  }, [threadMessages, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin || !selectedThread) return;
@@ -106,8 +126,20 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         if (isAdmin) {
           fetchIncomingThreads();
-          if (selectedThread) {
-            fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+          const changed = payload.new || payload.old;
+          if (!changed) return;
+
+          const key = threadKey(changed.member_id, changed.virtual_profile_id);
+          const selectedKey = selectedThread
+            ? threadKey(selectedThread.member_id, selectedThread.virtual_profile_id)
+            : null;
+
+          if (selectedKey && key === selectedKey) {
+            fetchThreadMessages(changed.member_id, changed.virtual_profile_id);
+            setAdminUnreadByThread((prev) => ({ ...prev, [key]: 0 }));
+          } else if (changed.sender_role === 'member') {
+            setAdminUnreadByThread((prev) => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
+            playNotificationSound();
           }
           return;
         }
@@ -257,6 +289,7 @@ export default function App() {
     setIncomingThreads([]);
     setSelectedThread(null);
     setUnreadByProfile({});
+    setAdminUnreadByThread({});
     setStatus('Çıkış yapıldı.');
   }
 
@@ -436,11 +469,15 @@ export default function App() {
                   onClick={() => setSelectedThread(thread)}
                   className={selectedThread?.member_id === thread.member_id && selectedThread?.virtual_profile_id === thread.virtual_profile_id ? 'active' : ''}
                 >
-                  {thread.member_username} → {thread.virtual_name}
+                  <div>{thread.member_username} → {thread.virtual_name}</div>
+                  {thread.last_message_content && <small>{thread.last_message_content}</small>}
+                  {adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)] > 0 && (
+                    <small> • Yeni ({adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)]})</small>
+                  )}
                 </button>
               ))}
             </div>
-            <div className="chat-box">
+            <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
               {threadMessages.map((msg) => (
                 <div key={msg.id} className={`msg ${msg.sender_role}`}>
                   <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>

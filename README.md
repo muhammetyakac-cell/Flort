@@ -11,6 +11,7 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - Admin paneli: tek cevap penceresi + konuşma geçmişini görme
 - Mesajlar admin ve üyede **realtime** güncellenir
 - Admin cevabı geldiğinde kullanıcı tarafında **Yeni** etiketi + bildirim sesi çalar
+- Admin panelde de yeni üye mesajları için **Yeni** etiketi ve otomatik en alta scroll vardır
 
 ## Kurulum
 1. Proje kökündeki `.env` dosyasında şu değişkenleri güncelle:

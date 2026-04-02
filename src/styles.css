@@ -174,3 +174,17 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
   margin-bottom: 10px;
   border: 1px solid #dbeafe;
 }
+
+.admin-chat-box {
+  height: 520px;
+}
+
+.thread-list button {
+  text-align: left;
+}
+
+.thread-list button small {
+  display: block;
+  opacity: 0.9;
+  margin-top: 2px;
+}
