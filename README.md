@@ -45,4 +45,4 @@ Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon e
 
 ## Realtime Notu
 Supabase Dashboard -> Database -> Replication bölümünde `messages` tablosunun realtime için açık olduğundan emin olun.
-`admin_threads` bir VIEW olduğu için realtime'a eklenemez; admin panel realtime'ı `messages` üzerinden alır.
+`admin_threads` artık TABLE olarak tutulur; realtime publication'a eklenebilir ve admin panelde canlı thread listesi sağlar.

@@ -95,8 +95,39 @@ begin
   end if;
 end $$;
 
-create or replace view public.admin_threads as
-with ranked as (
+-- admin_threads artık VIEW değil TABLE (realtime için)
+drop view if exists public.admin_threads;
+
+create table if not exists public.admin_threads (
+  member_id uuid not null,
+  virtual_profile_id uuid not null,
+  member_username text not null,
+  virtual_name text not null,
+  last_message_content text,
+  last_sender_role text,
+  last_message_at timestamptz not null,
+  primary key (member_id, virtual_profile_id)
+);
+
+-- Backfill / refresh
+insert into public.admin_threads (
+  member_id,
+  virtual_profile_id,
+  member_username,
+  virtual_name,
+  last_message_content,
+  last_sender_role,
+  last_message_at
+)
+select
+  ranked.member_id,
+  ranked.virtual_profile_id,
+  ranked.member_username,
+  ranked.virtual_name,
+  ranked.last_message_content,
+  ranked.last_sender_role,
+  ranked.last_message_at
+from (
   select
     m.member_id,
     vp.id as virtual_profile_id,
@@ -112,28 +143,82 @@ with ranked as (
   from public.messages m
   join public.virtual_profiles vp on vp.id = m.virtual_profile_id
   join public.members mb on mb.id = m.member_id
-)
-select
-  member_id,
-  virtual_profile_id,
-  member_username,
-  virtual_name,
-  last_message_content,
-  last_sender_role,
-  last_message_at
-from ranked
-where rn = 1;
+) ranked
+where ranked.rn = 1
+on conflict (member_id, virtual_profile_id)
+do update set
+  member_username = excluded.member_username,
+  virtual_name = excluded.virtual_name,
+  last_message_content = excluded.last_message_content,
+  last_sender_role = excluded.last_sender_role,
+  last_message_at = excluded.last_message_at;
+
+create or replace function public.sync_admin_threads_from_messages()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (tg_op = 'DELETE') then
+    delete from public.admin_threads t
+    where t.member_id = old.member_id
+      and t.virtual_profile_id = old.virtual_profile_id
+      and not exists (
+        select 1 from public.messages m
+        where m.member_id = old.member_id
+          and m.virtual_profile_id = old.virtual_profile_id
+      );
+    return old;
+  end if;
+
+  insert into public.admin_threads (
+    member_id,
+    virtual_profile_id,
+    member_username,
+    virtual_name,
+    last_message_content,
+    last_sender_role,
+    last_message_at
+  )
+  select
+    m.member_id,
+    m.virtual_profile_id,
+    mb.username,
+    vp.name,
+    m.content,
+    m.sender_role,
+    m.created_at
+  from public.messages m
+  join public.members mb on mb.id = m.member_id
+  join public.virtual_profiles vp on vp.id = m.virtual_profile_id
+  where m.id = new.id
+  on conflict (member_id, virtual_profile_id)
+  do update set
+    member_username = excluded.member_username,
+    virtual_name = excluded.virtual_name,
+    last_message_content = excluded.last_message_content,
+    last_sender_role = excluded.last_sender_role,
+    last_message_at = excluded.last_message_at;
+
+  return new;
+end $$;
+
+drop trigger if exists trg_sync_admin_threads_from_messages on public.messages;
+create trigger trg_sync_admin_threads_from_messages
+after insert or update or delete on public.messages
+for each row execute function public.sync_admin_threads_from_messages();
 
 alter table public.members enable row level security;
 alter table public.member_profiles enable row level security;
 alter table public.virtual_profiles enable row level security;
 alter table public.messages enable row level security;
+alter table public.admin_threads enable row level security;
 
 -- Politikaları idempotent yapmak için önce varsa sil
 drop policy if exists "members_all_anon" on public.members;
 drop policy if exists "member_profiles_all_anon" on public.member_profiles;
 drop policy if exists "virtual_profiles_all_anon" on public.virtual_profiles;
 drop policy if exists "messages_all_anon" on public.messages;
+drop policy if exists "admin_threads_all_anon" on public.admin_threads;
 
 create policy "members_all_anon"
   on public.members for all
@@ -155,6 +240,12 @@ create policy "virtual_profiles_all_anon"
 
 create policy "messages_all_anon"
   on public.messages for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy "admin_threads_all_anon"
+  on public.admin_threads for all
   to anon, authenticated
   using (true)
   with check (true);
@@ -185,28 +276,11 @@ using (bucket_id = 'profile-images')
 with check (bucket_id = 'profile-images');
 
 
--- Realtime sadece fiziksel tablolar için açılabilir (view için açılamaz)
+-- Realtime publication (messages + admin_threads tablosu)
 do $$
 declare
   rel_exists boolean;
 begin
-  -- admin_threads bir view olduğu için publication'a eklenmemeli
-  select exists (
-    select 1
-    from pg_publication_rel pr
-    join pg_class c on c.oid = pr.prrelid
-    join pg_namespace n on n.oid = c.relnamespace
-    join pg_publication p on p.oid = pr.prpubid
-    where p.pubname = 'supabase_realtime'
-      and n.nspname = 'public'
-      and c.relname = 'admin_threads'
-  ) into rel_exists;
-
-  if rel_exists then
-    execute 'alter publication supabase_realtime drop table public.admin_threads';
-  end if;
-
-  -- messages tablosu publication içinde yoksa ekle
   select exists (
     select 1
     from pg_publication_rel pr
@@ -221,7 +295,21 @@ begin
   if not rel_exists then
     execute 'alter publication supabase_realtime add table public.messages';
   end if;
+
+  select exists (
+    select 1
+    from pg_publication_rel pr
+    join pg_class c on c.oid = pr.prrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_publication p on p.oid = pr.prpubid
+    where p.pubname = 'supabase_realtime'
+      and n.nspname = 'public'
+      and c.relname = 'admin_threads'
+  ) into rel_exists;
+
+  if not rel_exists then
+    execute 'alter publication supabase_realtime add table public.admin_threads';
+  end if;
 exception when undefined_object then
-  -- publication yoksa atla
   null;
 end $$;
