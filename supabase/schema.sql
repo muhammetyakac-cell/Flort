@@ -19,6 +19,32 @@ create table if not exists public.virtual_profiles (
   created_at timestamptz not null default now()
 );
 
+-- Eski şemadan gelen created_by uuid kolonunu text'e çevir (çakışmasız migration)
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'virtual_profiles'
+      and column_name = 'created_by'
+      and data_type = 'uuid'
+  ) then
+    begin
+      alter table public.virtual_profiles drop constraint if exists virtual_profiles_created_by_fkey;
+    exception when undefined_object then
+      null;
+    end;
+
+    alter table public.virtual_profiles
+      alter column created_by type text using coalesce(created_by::text, 'admin');
+  end if;
+
+  alter table public.virtual_profiles
+    alter column created_by set default 'admin',
+    alter column created_by set not null;
+end $$;
+
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   member_id uuid not null references public.members(id) on delete cascade,

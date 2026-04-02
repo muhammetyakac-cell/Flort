@@ -151,7 +151,6 @@ export default function App() {
       age: Number(profileForm.age),
       gender: profileForm.gender,
       hobbies: profileForm.hobbies,
-      created_by: 'admin',
     });
     if (error) return setStatus(error.message);
     setProfileForm(initialProfile);
