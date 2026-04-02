@@ -102,7 +102,21 @@ begin
 end $$;
 
 -- admin_threads artık VIEW değil TABLE (realtime için)
-drop view if exists public.admin_threads;
+do $$
+declare
+  relkind_char "char";
+begin
+  select c.relkind into relkind_char
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = 'admin_threads'
+  limit 1;
+
+  -- Eğer eski yapı view ise sil, table ise dokunma
+  if relkind_char = 'v' then
+    execute 'drop view public.admin_threads';
+  end if;
+end $$;
 
 create table if not exists public.admin_threads (
   member_id uuid not null,
