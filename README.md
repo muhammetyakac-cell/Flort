@@ -9,6 +9,7 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - Üye giriş yaptıktan sonra kendi profilini düzenler: yaş, hobiler, şehir + **fotoğraf**
 - Üye -> sadece sanal profillere mesaj atabilir
 - Admin paneli: tek cevap penceresi + konuşma geçmişini görme
+- Mesajlar admin ve üyede **realtime** güncellenir
 
 ## Kurulum
 1. Proje kökündeki `.env` dosyasında şu değişkenleri güncelle:
@@ -38,3 +39,7 @@ Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon e
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
   - `VITE_ADMIN_PASSWORD`
+
+
+## Realtime Notu
+Supabase Dashboard -> Database -> Replication bölümünde `messages` tablosunun realtime için açık olduğundan emin olun.

@@ -59,6 +59,36 @@ export default function App() {
   }, [memberSession, isAdmin]);
 
 
+
+  useEffect(() => {
+    if (!loggedIn) return;
+
+    const channel = supabase
+      .channel('messages-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        if (isAdmin) {
+          fetchIncomingThreads();
+          if (selectedThread) {
+            fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+          }
+          return;
+        }
+
+        if (!memberSession) return;
+        const changed = payload.new || payload.old;
+        if (!changed) return;
+
+        if (changed.member_id === memberSession.id && selectedProfileId && changed.virtual_profile_id === selectedProfileId) {
+          fetchMessages(selectedProfileId);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loggedIn, isAdmin, memberSession, selectedProfileId, selectedThread]);
+
   async function uploadImage(file, folder) {
     if (!file) return null;
     const ext = file.name.split('.').pop() || 'jpg';
