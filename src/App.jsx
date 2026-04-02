@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
@@ -27,6 +27,8 @@ export default function App() {
   const [adminReply, setAdminReply] = useState('');
   const [threadMessages, setThreadMessages] = useState([]);
   const [memberProfile, setMemberProfile] = useState(initialMemberProfile);
+  const [unreadByProfile, setUnreadByProfile] = useState({});
+  const chatBoxRef = useRef(null);
 
   const selectedProfile = useMemo(
     () => virtualProfiles.find((p) => p.id === selectedProfileId) || null,
@@ -34,6 +36,29 @@ export default function App() {
   );
 
   const loggedIn = !!memberSession || isAdmin;
+
+
+  function playNotificationSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.25);
+    } catch {
+      // Sessizce geç
+    }
+  }
+
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -46,6 +71,19 @@ export default function App() {
     fetchMessages(selectedProfileId);
   }, [memberSession, selectedProfileId, isAdmin]);
 
+
+
+
+  useEffect(() => {
+    if (!selectedProfileId || isAdmin) return;
+    setUnreadByProfile((prev) => ({ ...prev, [selectedProfileId]: 0 }));
+  }, [selectedProfileId, isAdmin]);
+
+  useEffect(() => {
+    if (!memberSession || isAdmin) return;
+    if (!chatBoxRef.current) return;
+    chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+  }, [messages, memberSession, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin || !selectedThread) return;
@@ -78,8 +116,22 @@ export default function App() {
         const changed = payload.new || payload.old;
         if (!changed) return;
 
-        if (changed.member_id === memberSession.id && selectedProfileId && changed.virtual_profile_id === selectedProfileId) {
+        if (changed.member_id !== memberSession.id) return;
+
+        if (changed.sender_role === 'virtual') {
+          playNotificationSound();
+        }
+
+        if (selectedProfileId && changed.virtual_profile_id === selectedProfileId) {
           fetchMessages(selectedProfileId);
+          if (changed.sender_role === 'virtual') {
+            setUnreadByProfile((prev) => ({ ...prev, [selectedProfileId]: 0 }));
+          }
+        } else if (changed.sender_role === 'virtual') {
+          setUnreadByProfile((prev) => ({
+            ...prev,
+            [changed.virtual_profile_id]: (prev[changed.virtual_profile_id] || 0) + 1,
+          }));
         }
       })
       .subscribe();
@@ -204,6 +256,7 @@ export default function App() {
     setMessages([]);
     setIncomingThreads([]);
     setSelectedThread(null);
+    setUnreadByProfile({});
     setStatus('Çıkış yapıldı.');
   }
 
@@ -406,6 +459,7 @@ export default function App() {
             {virtualProfiles.map((profile) => (
               <button key={profile.id} onClick={() => setSelectedProfileId(profile.id)} className={selectedProfileId === profile.id ? 'active' : ''}>
                 {profile.name}
+                {unreadByProfile[profile.id] > 0 && <small> • Yeni ({unreadByProfile[profile.id]})</small>}
               </button>
             ))}
             {selectedProfile && (
@@ -419,7 +473,7 @@ export default function App() {
           </aside>
           <section className="card">
             <h3>Sohbet</h3>
-            <div className="chat-box">
+            <div className="chat-box" ref={chatBoxRef}>
               {messages.map((msg) => (
                 <div key={msg.id} className={`msg ${msg.sender_role}`}>
                   <span>{msg.sender_role === 'member' ? 'Sen' : selectedProfile?.name}</span>

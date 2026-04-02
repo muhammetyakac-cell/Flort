@@ -10,6 +10,7 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - Üye -> sadece sanal profillere mesaj atabilir
 - Admin paneli: tek cevap penceresi + konuşma geçmişini görme
 - Mesajlar admin ve üyede **realtime** güncellenir
+- Admin cevabı geldiğinde kullanıcı tarafında **Yeni** etiketi + bildirim sesi çalar
 
 ## Kurulum
 1. Proje kökündeki `.env` dosyasında şu değişkenleri güncelle:
