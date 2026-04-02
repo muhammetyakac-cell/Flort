@@ -43,6 +43,7 @@ export default function App() {
   const [adminTypingByThread, setAdminTypingByThread] = useState({});
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [adminDrawerOpen, setAdminDrawerOpen] = useState(true);
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -62,6 +63,9 @@ export default function App() {
   }, [virtualProfiles, unreadByProfile]);
 
   const loggedIn = !!memberSession || isAdmin;
+
+  const profileById = useMemo(() => Object.fromEntries(virtualProfiles.map((p) => [p.id, p])), [virtualProfiles]);
+  const selectedThreadProfile = useMemo(() => (selectedThread ? profileById[selectedThread.virtual_profile_id] : null), [selectedThread, profileById]);
 
   function threadKey(memberId, profileId) {
     return `${memberId}::${profileId}`;
@@ -667,49 +671,52 @@ export default function App() {
           </div>
         </section>
       ) : isAdmin ? (
-        <main className="dashboard admin-grid admin-dashboard">
-          <section className="card">
-            <h3>Sanal Profil Oluştur</h3>
-            <input placeholder="Ad (boşsa otomatik)" value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
-            <input placeholder="Yaş (boşsa otomatik)" type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
-            <input placeholder="Şehir (boşsa otomatik)" value={profileForm.city} onChange={(e) => setProfileForm((s) => ({ ...s, city: e.target.value }))} />
-            <input placeholder="Cinsiyet" value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
-            <button type="button" onClick={fillRandomVirtualProfile}>Rastgele Kız Profili Üret (250 isim)</button>
-            <textarea placeholder="Hobiler" value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const url = await uploadImage(file, 'virtual-profiles');
-                if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
-              }}
-            />
-            <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
-          </section>
+        <main className="admin-modern">
+          <aside className="admin-left card">
+            <div className="panel-title-row">
+              <h3>Mesaj Bekleyen Thread'ler</h3>
+            </div>
+            <div className="thread-queue modern-thread-queue">
+              {incomingThreads.map((thread) => {
+                const threadProfile = profileById[thread.virtual_profile_id];
+                return (
+                  <button
+                    key={`${thread.member_id}-${thread.virtual_profile_id}`}
+                    onClick={() => setSelectedThread(thread)}
+                    className={`thread-item modern ${selectedThread?.member_id === thread.member_id && selectedThread?.virtual_profile_id === thread.virtual_profile_id ? 'active' : ''}`}
+                  >
+                    <span className="thread-avatar-wrap">
+                      {threadProfile?.photo_url ? (
+                        <img src={threadProfile.photo_url} alt={thread.virtual_name} className="thread-avatar" />
+                      ) : (
+                        <span className="thread-avatar-fallback">{thread.virtual_name?.slice(0, 1)}</span>
+                      )}
+                    </span>
+                    <span className="thread-copy">
+                      <strong>{thread.member_username} → {thread.virtual_name}</strong>
+                      {thread.last_message_content && <small>{thread.last_message_content}</small>}
+                      {adminTypingByThread[threadKey(thread.member_id, thread.virtual_profile_id)] && <small>• yazıyor...</small>}
+                    </span>
+                    {adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)] > 0 && (
+                      <span className="unread-pill">{adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)]}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
 
-          <section className="card">
-            <h3>Mesajlara Cevap Penceresi</h3>
-
-            <div className="thread-queue">
-              {incomingThreads.map((thread) => (
-                <button
-                  key={`${thread.member_id}-${thread.virtual_profile_id}`}
-                  onClick={() => setSelectedThread(thread)}
-                  className={`thread-item ${selectedThread?.member_id === thread.member_id && selectedThread?.virtual_profile_id === thread.virtual_profile_id ? 'active' : ''}`}
-                >
-                  <div>{thread.member_username} → {thread.virtual_name}</div>
-                  {thread.last_message_content && <small>{thread.last_message_content}</small>}
-                  {adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)] > 0 && (
-                    <small> • Yeni ({adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)]})</small>
-                  )}
-                  {adminTypingByThread[threadKey(thread.member_id, thread.virtual_profile_id)] && <small> • yazıyor...</small>}
-                </button>
-              ))}
+          <section className="admin-center card">
+            <div className="chat-header">
+              <div>
+                <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
+                <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
+              </div>
+              <button type="button" className="drawer-toggle" onClick={() => setAdminDrawerOpen((v) => !v)}>
+                {adminDrawerOpen ? 'Paneli Gizle' : 'Paneli Aç'}
+              </button>
             </div>
 
-            <h4>Seçilen Sohbet</h4>
             <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
               {threadMessages.map((msg) => {
                 const audioUrl = getAudioUrl(msg.content);
@@ -728,7 +735,8 @@ export default function App() {
 
             <div className="quick-replies">
               {QUICK_REPLIES.map((reply) => (
-                <button key={reply} type="button" className="chip" onClick={() => setAdminReply((prev) => `${prev ? `${prev}\n` : ''}${reply}`)}>{reply}</button>
+                <button key={reply} type="button" className="chip" onClick={() => setAdminReply((prev) => `${prev ? `${prev}
+` : ''}${reply}`)}>{reply}</button>
               ))}
               <button type="button" className="chip ai" onClick={fetchAiSuggestions} disabled={loadingSuggestions}>{loadingSuggestions ? 'AI düşünüyor...' : 'AI Önerisi Getir'}</button>
             </div>
@@ -744,6 +752,61 @@ export default function App() {
             <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} />
             <button onClick={sendAdminReply}>Yanıt Gönder</button>
           </section>
+
+          {adminDrawerOpen && (
+            <aside className="admin-right card drawer-panel">
+              <div className="panel-title-row">
+                <h3>Sanal Profil Oluştur</h3>
+                <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
+              </div>
+
+              <label className="floating-field">
+                <input placeholder=" " value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
+                <span>Ad (boşsa otomatik)</span>
+              </label>
+              <label className="floating-field">
+                <input placeholder=" " type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
+                <span>Yaş (boşsa otomatik)</span>
+              </label>
+              <label className="floating-field">
+                <input placeholder=" " value={profileForm.city} onChange={(e) => setProfileForm((s) => ({ ...s, city: e.target.value }))} />
+                <span>Şehir (boşsa otomatik)</span>
+              </label>
+              <label className="floating-field">
+                <input placeholder=" " value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
+                <span>Cinsiyet</span>
+              </label>
+              <label className="floating-field">
+                <textarea placeholder=" " value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
+                <span>Hobiler</span>
+              </label>
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const url = await uploadImage(file, 'virtual-profiles');
+                  if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
+                }}
+              />
+              {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
+
+              <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
+
+              {selectedThreadProfile && (
+                <div className="meta">
+                  <h4>Seçili Profil Bilgileri</h4>
+                  {selectedThreadProfile.photo_url && <img src={selectedThreadProfile.photo_url} alt={selectedThreadProfile.name} className="profile-photo" />}
+                  <p><strong>Ad:</strong> {selectedThreadProfile.name}</p>
+                  <p><strong>Yaş:</strong> {selectedThreadProfile.age}</p>
+                  <p><strong>Şehir:</strong> {selectedThreadProfile.city || '-'}</p>
+                  <p><strong>Hobiler:</strong> {selectedThreadProfile.hobbies || '-'}</p>
+                </div>
+              )}
+            </aside>
+          )}
         </main>
       ) : (
         <main className="dashboard user-grid user-dashboard">
