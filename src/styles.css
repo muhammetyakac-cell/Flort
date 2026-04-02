@@ -176,7 +176,7 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 }
 
 .admin-chat-box {
-  height: 160px;
+  height: 320px;
 }
 
 .thread-list button {
