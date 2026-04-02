@@ -54,6 +54,28 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+
+-- Eski şemadan gelen messages.member_id foreign key'ini members tablosuna taşı
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema='public' and table_name='messages'
+  ) then
+    alter table public.messages drop constraint if exists messages_member_id_fkey;
+
+    -- Orphan kayıtlar yeni FK'yi bozmasın
+    delete from public.messages m
+    where not exists (
+      select 1 from public.members mb where mb.id = m.member_id
+    );
+
+    alter table public.messages
+      add constraint messages_member_id_fkey
+      foreign key (member_id) references public.members(id) on delete cascade;
+  end if;
+end $$;
+
 create or replace view public.admin_threads as
 select
   m.member_id,

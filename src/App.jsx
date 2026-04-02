@@ -133,6 +133,17 @@ export default function App() {
 
   async function sendMessage() {
     if (!memberSession || !selectedProfileId || !newMessage.trim()) return;
+
+    const { data: memberExists } = await supabase
+      .from('members')
+      .select('id')
+      .eq('id', memberSession.id)
+      .maybeSingle();
+
+    if (!memberExists) {
+      return setStatus('Oturum üyeliği veritabanında bulunamadı. Lütfen çıkış yapıp tekrar giriş yap.');
+    }
+
     const { error } = await supabase.from('messages').insert({
       member_id: memberSession.id,
       virtual_profile_id: selectedProfileId,

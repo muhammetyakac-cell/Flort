@@ -13,7 +13,7 @@ Bu sürümde **mail/auth bağımlılığı tamamen kaldırıldı**. Admin giriş
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_ADMIN_PASSWORD`
-2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski uuid `created_by` kolonunu otomatik text'e migrate eder)
+2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski `created_by` ve `messages_member_id_fkey` yapısını otomatik migrate eder)
 3. Uygulamayı başlat:
    - `npm install`
    - `npm run dev`
