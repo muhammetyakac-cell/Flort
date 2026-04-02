@@ -336,3 +336,63 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 .admin-chat-box .msg span {
   font-size: 0.82rem;
 }
+
+/* Logged-in modern dashboard look */
+.dashboard {
+  position: relative;
+  padding: 10px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(99, 102, 241, 0.08));
+}
+
+.dashboard .card {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: linear-gradient(170deg, rgba(255,255,255,0.92), rgba(245,250,255,0.82));
+  box-shadow: 0 14px 30px rgba(30, 41, 59, 0.12);
+}
+
+.dashboard h3 {
+  margin-top: 2px;
+  margin-bottom: 12px;
+  font-size: 1.2rem;
+  color: #0f172a;
+}
+
+.admin-dashboard {
+  grid-template-columns: minmax(320px, 1fr) minmax(520px, 1.8fr);
+}
+
+.user-dashboard {
+  grid-template-columns: minmax(260px, 1fr) minmax(460px, 1.7fr) minmax(260px, 1fr);
+}
+
+.user-dashboard .card,
+.admin-dashboard .card {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.user-dashboard .card:hover,
+.admin-dashboard .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(14, 116, 144, 0.16);
+}
+
+.thread-item {
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.26);
+}
+
+.thread-item.active {
+  box-shadow: 0 10px 22px rgba(14, 116, 144, 0.35);
+}
+
+.admin-chat-box,
+.user-dashboard .chat-box {
+  border: 1px solid rgba(147, 197, 253, 0.5);
+}
+
+@media (max-width: 1200px) {
+  .user-dashboard,
+  .admin-dashboard {
+    grid-template-columns: 1fr;
+  }
+}

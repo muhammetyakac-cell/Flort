@@ -450,7 +450,7 @@ export default function App() {
           </div>
         </section>
       ) : isAdmin ? (
-        <main className="admin-grid">
+        <main className="dashboard admin-grid admin-dashboard">
           <section className="card">
             <h3>Sanal Profil Oluştur</h3>
             <input placeholder="Ad" value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
@@ -503,7 +503,7 @@ export default function App() {
           </section>
         </main>
       ) : (
-        <main className="user-grid">
+        <main className="dashboard user-grid user-dashboard">
           <aside className="card">
             <h3>Sanal Profiller</h3>
             {virtualProfiles.map((profile) => (
