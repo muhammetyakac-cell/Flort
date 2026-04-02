@@ -20,6 +20,8 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
    - `npm install`
    - `npm run dev`
 
+> Eğer `Could not find the 'photo_url' column of 'virtual_profiles'` hatası alırsan, `supabase/schema.sql` scriptini tekrar çalıştır.
+
 ## Yeni Migration İçeriği
 - `member_profiles` tablosu
 - `virtual_profiles.photo_url` kolonu

@@ -225,13 +225,27 @@ export default function App() {
 
   async function createVirtualProfile() {
     if (!profileForm.name || !profileForm.age || !profileForm.gender) return setStatus('İsim, yaş, cinsiyet zorunlu.');
-    const { error } = await supabase.from('virtual_profiles').insert({
+    let { error } = await supabase.from('virtual_profiles').insert({
       name: profileForm.name,
       age: Number(profileForm.age),
       gender: profileForm.gender,
       hobbies: profileForm.hobbies,
       photo_url: profileForm.photo_url,
     });
+
+    if (error?.message?.includes("Could not find the 'photo_url' column")) {
+      const retry = await supabase.from('virtual_profiles').insert({
+        name: profileForm.name,
+        age: Number(profileForm.age),
+        gender: profileForm.gender,
+        hobbies: profileForm.hobbies,
+      });
+      error = retry.error;
+      if (!error) {
+        setStatus('Profil kaydedildi. Fotoğraf kolonu henüz migration almadığı için görsel eklenmedi. SQL migration'ı tekrar çalıştır.');
+      }
+    }
+
     if (error) return setStatus(error.message);
     setProfileForm(initialProfile);
     fetchVirtualProfiles();

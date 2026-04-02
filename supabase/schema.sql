@@ -29,6 +29,17 @@ create table if not exists public.virtual_profiles (
   created_at timestamptz not null default now()
 );
 
+
+-- Eski tabloda eksik kolonları tamamla
+alter table if exists public.virtual_profiles
+  add column if not exists photo_url text;
+
+alter table if exists public.member_profiles
+  add column if not exists photo_url text,
+  add column if not exists city text,
+  add column if not exists hobbies text,
+  add column if not exists age int;
+
 -- Eski şemadan gelen created_by uuid kolonunu text'e çevir (çakışmasız migration)
 do $$
 begin
