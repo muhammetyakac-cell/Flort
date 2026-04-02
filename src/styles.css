@@ -176,7 +176,7 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 }
 
 .admin-chat-box {
-  height: 140px;
+  height: 160px;
 }
 
 .thread-list button {
@@ -281,4 +281,41 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
   .auth-hero { grid-template-columns: 1fr; }
   .auth-info { text-align: center; }
   .auth-info p { margin: 0 auto; }
+}
+
+.thread-queue {
+  max-height: 395px; /* yaklaşık 5 satır kart */
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-right: 4px;
+}
+
+.thread-item {
+  text-align: left;
+  border: none;
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(120deg, #1d4ed8, #7c3aed);
+  color: #e0f2fe;
+}
+
+.thread-item.active {
+  background: linear-gradient(120deg, #0e7490, #2563eb);
+}
+
+.thread-item div {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.thread-item small {
+  display: block;
+  opacity: 0.95;
+  margin-top: 3px;
+}
+
+.card h4 {
+  margin: 6px 0 8px;
 }

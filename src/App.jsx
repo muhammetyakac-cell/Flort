@@ -472,12 +472,13 @@ export default function App() {
 
           <section className="card">
             <h3>Mesajlara Cevap Penceresi</h3>
-            <div className="thread-list">
+
+            <div className="thread-queue">
               {incomingThreads.map((thread) => (
                 <button
                   key={`${thread.member_id}-${thread.virtual_profile_id}`}
                   onClick={() => setSelectedThread(thread)}
-                  className={selectedThread?.member_id === thread.member_id && selectedThread?.virtual_profile_id === thread.virtual_profile_id ? 'active' : ''}
+                  className={`thread-item ${selectedThread?.member_id === thread.member_id && selectedThread?.virtual_profile_id === thread.virtual_profile_id ? 'active' : ''}`}
                 >
                   <div>{thread.member_username} → {thread.virtual_name}</div>
                   {thread.last_message_content && <small>{thread.last_message_content}</small>}
@@ -487,6 +488,8 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            <h4>Seçilen Sohbet</h4>
             <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
               {threadMessages.map((msg) => (
                 <div key={msg.id} className={`msg ${msg.sender_role}`}>
