@@ -176,7 +176,7 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 }
 
 .admin-chat-box {
-  height: 320px;
+  height: 640px;
 }
 
 .thread-list button {
@@ -319,4 +319,20 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 
 .card h4 {
   margin: 6px 0 8px;
+}
+
+.admin-chat-box .msg {
+  margin: 4px 0;
+  padding: 6px 8px;
+  max-width: 88%;
+  border-radius: 8px;
+}
+
+.admin-chat-box .msg p {
+  margin: 2px 0 0;
+  line-height: 1.25;
+}
+
+.admin-chat-box .msg span {
+  font-size: 0.82rem;
 }
