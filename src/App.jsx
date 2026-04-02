@@ -373,7 +373,7 @@ export default function App() {
     const { data, error } = await supabase
       .from('admin_threads')
       .select('*')
-      .order('last_message_at', { ascending: true });
+      .order('last_message_at', { ascending: false });
     if (error) return setStatus(error.message);
     setIncomingThreads(data || []);
     if (!selectedThread && data?.length) setSelectedThread(data[0]);

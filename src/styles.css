@@ -284,7 +284,7 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
 }
 
 .thread-queue {
-  max-height: 395px; /* yaklaşık 5 satır kart */
+  height: calc(5 * 78px + 4 * 10px);
   overflow-y: auto;
   display: grid;
   gap: 10px;
@@ -297,6 +297,8 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
   border: none;
   border-radius: 14px;
   padding: 14px;
+  height: 78px;
+  overflow: hidden;
   background: linear-gradient(120deg, #1d4ed8, #7c3aed);
   color: #e0f2fe;
 }
@@ -314,6 +316,9 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
   display: block;
   opacity: 0.95;
   margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card h4 {
