@@ -93,6 +93,12 @@ alter table public.virtual_profiles enable row level security;
 alter table public.messages enable row level security;
 
 -- Auth tamamen kaldırıldığı için demo amaçlı anon erişim açık
+-- Politikaları idempotent yapmak için önce varsa sil
+
+drop policy if exists "members_all_anon" on public.members;
+drop policy if exists "virtual_profiles_all_anon" on public.virtual_profiles;
+drop policy if exists "messages_all_anon" on public.messages;
+
 create policy "members_all_anon"
   on public.members for all
   to anon, authenticated
