@@ -139,14 +139,17 @@ export default function App() {
       const signUpMsg = signUpAttempt.error?.message?.toLowerCase() || '';
       const isAlreadyExists = signUpMsg.includes('already') || signUpMsg.includes('registered');
 
-      if (!signUpAttempt.error || isAlreadyExists) {
-        const retry = await supabase.auth.signInWithPassword({
-          email: adminEmail,
-          password: ADMIN_PASSWORD,
-        });
-        data = retry.data;
-        error = retry.error;
+      if (signUpAttempt.error && !isAlreadyExists) {
+        setLoading(false);
+        return setStatus(`Admin hesabı otomatik oluşturulamadı: ${signUpAttempt.error.message}`);
       }
+
+      const retry = await supabase.auth.signInWithPassword({
+        email: adminEmail,
+        password: ADMIN_PASSWORD,
+      });
+      data = retry.data;
+      error = retry.error;
     }
 
     setLoading(false);
@@ -155,7 +158,7 @@ export default function App() {
       if (mode === 'admin' && error.message?.toLowerCase().includes('email not confirmed')) {
         return setStatus('Admin hesabı oluşturuldu ancak e-posta doğrulaması açık. Supabase -> Auth -> Email ayarlarında confirm email zorunluluğunu kapat veya admin hesabını doğrula.');
       }
-      return setStatus(error.message);
+      return setStatus(`Supabase login hatası: ${error.message}. Admin email sabit olarak ${adminEmail} kullanılıyor.`);
     }
 
     const isAdminAccount = mode === 'admin' ? true : data.user?.user_metadata?.username === 'admin';

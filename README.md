@@ -32,3 +32,15 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
   - `VITE_ADMIN_PASSWORD`
+
+
+## Invalid login credentials (Admin) - Kapsamlı Kontrol
+Aşağıdaki maddeleri sırayla doğrulayın:
+1. `.env` içindeki `VITE_ADMIN_PASSWORD`, admin giriş ekranına yazdığınız şifre ile birebir aynı olmalı.
+2. Uygulama admin için daima `admin@flort.local` ile giriş dener. Supabase Auth içinde bu kullanıcı olmalı veya Sign Up açık olmalı ki otomatik oluşturulabilsin.
+3. Supabase Dashboard -> Authentication -> Providers içinde **Email provider enabled** olmalı.
+4. Supabase Dashboard -> Authentication -> Settings içinde **Confirm email** açıksa, yeni oluşan admin hesabı doğrulanmadan giriş yapamaz.
+5. Supabase Dashboard -> Authentication -> Settings içinde **Disable new user signups** aktifse otomatik admin oluşturma başarısız olur.
+6. `.env` değiştiyse Vite dev server'ı yeniden başlatın (`npm run dev`).
+
+Not: Uygulama artık hata mesajında Supabase'in döndürdüğü asıl nedeni doğrudan gösterir.
