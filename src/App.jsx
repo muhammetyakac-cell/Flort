@@ -420,23 +420,33 @@ export default function App() {
       </header>
 
       {!loggedIn ? (
-        <section className="card">
-          <h2>{mode === 'admin' ? 'Admin girişi' : 'Kullanıcı giriş/kayıt'}</h2>
-          <input
-            placeholder={mode === 'admin' ? 'Admin için kullanıcı adı kullanılmıyor' : 'Kullanıcı adı'}
-            disabled={mode === 'admin'}
-            value={mode === 'admin' ? '' : authForm.username}
-            onChange={(e) => setAuthForm((s) => ({ ...s, username: e.target.value }))}
-          />
-          <input
-            placeholder="Şifre"
-            type="password"
-            value={authForm.password}
-            onChange={(e) => setAuthForm((s) => ({ ...s, password: e.target.value }))}
-          />
-          <div className="row">
-            <button disabled={loading} onClick={signIn}>Giriş yap</button>
+        <section className="auth-hero">
+          <div className="auth-card">
+            <div className="auth-badge">CHAT</div>
+            <h2>{mode === 'admin' ? 'Admin Login' : 'Login / Register'}</h2>
+            <input
+              placeholder={mode === 'admin' ? 'Admin için kullanıcı adı kullanılmıyor' : 'Username...'}
+              disabled={mode === 'admin'}
+              value={mode === 'admin' ? '' : authForm.username}
+              onChange={(e) => setAuthForm((st) => ({ ...st, username: e.target.value }))}
+            />
+            <input
+              placeholder="Password..."
+              type="password"
+              value={authForm.password}
+              onChange={(e) => setAuthForm((st) => ({ ...st, password: e.target.value }))}
+            />
+            <button disabled={loading} onClick={signIn}>Sign in</button>
             {mode !== 'admin' && <button disabled={loading} onClick={signUp}>Kayıt ol</button>}
+            <small>{mode === 'admin' ? 'Admin şifresi ile giriş yap' : 'Hesabın yoksa kayıt ol'}</small>
+          </div>
+
+          <div className="auth-info">
+            <h2>MESSENGER</h2>
+            <p>
+              Gerçek zamanlı sohbet, sanal profiller ve admin cevap penceresi ile modern bir chat deneyimi.
+              Üye olarak giriş yapıp profilini oluşturabilir, adminin yanıtlarını anında görebilirsin.
+            </p>
           </div>
         </section>
       ) : isAdmin ? (

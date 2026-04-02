@@ -188,3 +188,97 @@ button.active { background: linear-gradient(135deg, #0891b2, #2563eb); }
   opacity: 0.9;
   margin-top: 2px;
 }
+
+/* Auth hero screen */
+.auth-hero {
+  min-height: 78vh;
+  border-radius: 26px;
+  padding: 40px;
+  display: grid;
+  grid-template-columns: 440px 1fr;
+  gap: 36px;
+  align-items: center;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.02) 34%, transparent 35%),
+    radial-gradient(circle at 80% 70%, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.02) 30%, transparent 31%),
+    linear-gradient(135deg, #14b8ff 0%, #0ea5e9 38%, #0284c7 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card {
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 34px 28px 24px;
+  position: relative;
+  box-shadow: 0 20px 36px rgba(3, 40, 67, 0.25);
+  display: grid;
+  gap: 12px;
+}
+
+.auth-badge {
+  position: absolute;
+  top: -56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #1da1ff, #0b86db);
+  color: #e9f8ff;
+  font-size: 2rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  letter-spacing: 1px;
+  box-shadow: 0 12px 25px rgba(0, 88, 149, 0.35);
+}
+
+.auth-card h2 {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 2rem;
+  margin-top: 56px;
+  margin-bottom: 8px;
+}
+
+.auth-card input {
+  background: #eef2f7;
+  border-radius: 999px;
+  border: none;
+  padding: 14px 18px;
+  color: #334155;
+}
+
+.auth-card button {
+  border-radius: 999px;
+  font-size: 1.8rem;
+  font-weight: 400;
+  background: linear-gradient(120deg, #0ea5e9, #0284c7);
+}
+
+.auth-card small {
+  text-align: center;
+  color: #9aa3b2;
+  margin-top: 4px;
+}
+
+.auth-info h2 {
+  color: #e6fbff;
+  font-size: clamp(2rem, 4vw, 4rem);
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+.auth-info p {
+  color: #e4f5ff;
+  max-width: 520px;
+  line-height: 1.4;
+  font-size: clamp(1.05rem, 1.7vw, 2rem);
+}
+
+@media (max-width: 1024px) {
+  .auth-hero { grid-template-columns: 1fr; }
+  .auth-info { text-align: center; }
+  .auth-info p { margin: 0 auto; }
+}
