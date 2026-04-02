@@ -37,6 +37,15 @@ export default function App() {
     [selectedProfileId, virtualProfiles]
   );
 
+  const sortedProfiles = useMemo(() => {
+    return [...virtualProfiles].sort((a, b) => {
+      const unreadA = unreadByProfile[a.id] || 0;
+      const unreadB = unreadByProfile[b.id] || 0;
+      if (unreadA !== unreadB) return unreadB - unreadA;
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+  }, [virtualProfiles, unreadByProfile]);
+
   const loggedIn = !!memberSession || isAdmin;
 
 
@@ -532,12 +541,14 @@ export default function App() {
         <main className="dashboard user-grid user-dashboard">
           <aside className="card">
             <h3>Sanal Profiller</h3>
-            {virtualProfiles.map((profile) => (
-              <button key={profile.id} onClick={() => setSelectedProfileId(profile.id)} className={selectedProfileId === profile.id ? 'active' : ''}>
-                {profile.name}
-                {unreadByProfile[profile.id] > 0 && <small> • Yeni ({unreadByProfile[profile.id]})</small>}
-              </button>
-            ))}
+            <div className="profile-list">
+              {sortedProfiles.map((profile) => (
+                <button key={profile.id} onClick={() => setSelectedProfileId(profile.id)} className={selectedProfileId === profile.id ? 'active' : ''}>
+                  {profile.name}
+                  {unreadByProfile[profile.id] > 0 && <small> • Yeni ({unreadByProfile[profile.id]})</small>}
+                </button>
+              ))}
+            </div>
             {selectedProfile && (
               <div className="meta">
                 {selectedProfile.photo_url && <img src={selectedProfile.photo_url} alt={selectedProfile.name} className="profile-photo" />}
