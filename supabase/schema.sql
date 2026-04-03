@@ -437,3 +437,90 @@ BEGIN
 exception when undefined_object then
   null;
 END $$;
+
+-- Day-1 v2 domain tables (idempotent)
+create table if not exists public.thread_events (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null,
+  virtual_profile_id uuid not null,
+  event_type text not null check (event_type in ('status_change', 'bulk_sent', 'thread_closed', 'thread_reopened')),
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.presence_snapshots (
+  member_id uuid not null,
+  virtual_profile_id uuid not null,
+  role text not null check (role in ('member', 'admin')),
+  last_seen_at timestamptz not null default now(),
+  active_now boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (member_id, virtual_profile_id, role)
+);
+
+create table if not exists public.kpi_snapshots_daily (
+  metric_date date primary key,
+  daily_active_users int not null default 0,
+  avg_first_response_seconds numeric,
+  thread_close_rate numeric,
+  ai_suggestion_conversion_rate numeric,
+  created_at timestamptz not null default now()
+);
+
+alter table public.thread_events enable row level security;
+alter table public.presence_snapshots enable row level security;
+alter table public.kpi_snapshots_daily enable row level security;
+
+drop policy if exists "thread_events_all_anon" on public.thread_events;
+drop policy if exists "presence_snapshots_all_anon" on public.presence_snapshots;
+drop policy if exists "kpi_snapshots_daily_all_anon" on public.kpi_snapshots_daily;
+
+create policy "thread_events_all_anon"
+  on public.thread_events for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy "presence_snapshots_all_anon"
+  on public.presence_snapshots for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy "kpi_snapshots_daily_all_anon"
+  on public.kpi_snapshots_daily for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+-- typing_states timeout compatibility: auto-refresh updated_at and inactive fallback
+create or replace function public.trg_touch_typing_states_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+drop trigger if exists trg_touch_typing_states_updated_at on public.typing_states;
+create trigger trg_touch_typing_states_updated_at
+before update on public.typing_states
+for each row execute function public.trg_touch_typing_states_updated_at();
+
+create or replace function public.cleanup_stale_typing_states(p_timeout_seconds int default 8)
+returns int
+language plpgsql
+as $$
+declare
+  affected_count int;
+begin
+  update public.typing_states
+  set is_typing = false,
+      updated_at = now()
+  where is_typing = true
+    and updated_at < now() - make_interval(secs => p_timeout_seconds);
+
+  get diagnostics affected_count = row_count;
+  return affected_count;
+end $$;

@@ -98,6 +98,26 @@ export default function App() {
     return `${memberId}::${profileId}`;
   }
 
+  async function selectRows(table, buildQuery) {
+    const query = buildQuery(supabase.from(table).select('*'));
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function insertRows(table, payload) {
+    const { data, error } = await supabase.from(table).insert(payload).select();
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function updateRows(table, payload, buildQuery) {
+    const query = buildQuery(supabase.from(table).update(payload));
+    const { data, error } = await query.select();
+    if (error) throw error;
+    return data || [];
+  }
+
   function formatTime(ts) {
     if (!ts) return '';
     return new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -498,13 +518,13 @@ export default function App() {
   }
 
   async function fetchVirtualProfiles() {
-    const { data, error } = await supabase
-      .from('virtual_profiles')
-      .select('*')
-      .order('created_at', { ascending: true });
-    if (error) return setStatus(error.message);
-    setVirtualProfiles(data || []);
-    if (!selectedProfileId && data?.length) setSelectedProfileId(data[0].id);
+    try {
+      const data = await selectRows('virtual_profiles', (q) => q.order('created_at', { ascending: true }));
+      setVirtualProfiles(data || []);
+      if (!selectedProfileId && data?.length) setSelectedProfileId(data[0].id);
+    } catch (error) {
+      setStatus(error.message);
+    }
   }
 
   async function fetchMessages(profileId) {
@@ -596,13 +616,13 @@ export default function App() {
   }
 
   async function fetchIncomingThreads() {
-    const { data, error } = await supabase
-      .from('admin_threads')
-      .select('*')
-      .order('last_message_at', { ascending: false });
-    if (error) return setStatus(error.message);
-    setIncomingThreads(data || []);
-    if (!selectedThread && data?.length) setSelectedThread(data[0]);
+    try {
+      const data = await selectRows('admin_threads', (q) => q.order('last_message_at', { ascending: false }));
+      setIncomingThreads(data || []);
+      if (!selectedThread && data?.length) setSelectedThread(data[0]);
+    } catch (error) {
+      setStatus(error.message);
+    }
   }
 
   async function fetchThreadMessages(memberId, profileId) {
@@ -645,12 +665,21 @@ export default function App() {
 
   async function updateSelectedThreadTag(tag) {
     if (!selectedThread) return;
-    const { error } = await supabase
-      .from('admin_threads')
-      .update({ status_tag: tag })
-      .eq('member_id', selectedThread.member_id)
-      .eq('virtual_profile_id', selectedThread.virtual_profile_id);
-    if (error) return setStatus(error.message);
+    try {
+      await updateRows(
+        'admin_threads',
+        { status_tag: tag },
+        (q) => q.eq('member_id', selectedThread.member_id).eq('virtual_profile_id', selectedThread.virtual_profile_id)
+      );
+      await insertRows('thread_events', {
+        member_id: selectedThread.member_id,
+        virtual_profile_id: selectedThread.virtual_profile_id,
+        event_type: 'status_change',
+        meta: { status_tag: tag },
+      });
+    } catch (error) {
+      return setStatus(error.message);
+    }
     setSelectedThread((prev) => (prev ? { ...prev, status_tag: tag } : prev));
     fetchIncomingThreads();
   }
@@ -672,8 +701,17 @@ export default function App() {
       };
     });
 
-    const { error } = await supabase.from('messages').insert(rows);
-    if (error) return setStatus(error.message);
+    try {
+      await insertRows('messages', rows);
+      await insertRows('thread_events', rows.map((row) => ({
+        member_id: row.member_id,
+        virtual_profile_id: row.virtual_profile_id,
+        event_type: 'bulk_sent',
+        meta: { template: bulkTemplate },
+      })));
+    } catch (error) {
+      return setStatus(error.message);
+    }
     setSelectedThreadKeys({});
     setStatus(`${rows.length} thread için bulk mesaj gönderildi.`);
     fetchIncomingThreads();
