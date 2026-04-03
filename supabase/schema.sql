@@ -467,13 +467,24 @@ create table if not exists public.kpi_snapshots_daily (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.engagement_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null check (event_type in ('member_message', 'admin_reply', 'profile_view')),
+  member_id uuid references public.members(id) on delete cascade,
+  virtual_profile_id uuid references public.virtual_profiles(id) on delete cascade,
+  meta jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 alter table public.thread_events enable row level security;
 alter table public.presence_snapshots enable row level security;
 alter table public.kpi_snapshots_daily enable row level security;
+alter table public.engagement_events enable row level security;
 
 drop policy if exists "thread_events_all_anon" on public.thread_events;
 drop policy if exists "presence_snapshots_all_anon" on public.presence_snapshots;
 drop policy if exists "kpi_snapshots_daily_all_anon" on public.kpi_snapshots_daily;
+drop policy if exists "engagement_events_all_anon" on public.engagement_events;
 
 create policy "thread_events_all_anon"
   on public.thread_events for all
@@ -489,6 +500,12 @@ create policy "presence_snapshots_all_anon"
 
 create policy "kpi_snapshots_daily_all_anon"
   on public.kpi_snapshots_daily for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy "engagement_events_all_anon"
+  on public.engagement_events for all
   to anon, authenticated
   using (true)
   with check (true);

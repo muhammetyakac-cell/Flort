@@ -56,6 +56,7 @@ export default function App() {
   const [selectedThreadKeys, setSelectedThreadKeys] = useState({});
   const [bulkTemplate, setBulkTemplate] = useState(BULK_TEMPLATES[0]);
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
+  const [engagementInsights, setEngagementInsights] = useState({ topHours: [], topProfiles: [] });
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -80,6 +81,14 @@ export default function App() {
 
   const profileById = useMemo(() => Object.fromEntries(virtualProfiles.map((p) => [p.id, p])), [virtualProfiles]);
   const selectedThreadProfile = useMemo(() => (selectedThread ? profileById[selectedThread.virtual_profile_id] : null), [selectedThread, profileById]);
+  const sortedIncomingThreads = useMemo(() => {
+    return [...incomingThreads].sort((a, b) => {
+      const waitA = a.last_sender_role === 'member' ? 1 : 0;
+      const waitB = b.last_sender_role === 'member' ? 1 : 0;
+      if (waitA !== waitB) return waitB - waitA;
+      return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
+    });
+  }, [incomingThreads]);
 
   const slaStats = useMemo(() => {
     const waiting = incomingThreads.filter((t) => t.last_sender_role === 'member');
@@ -233,9 +242,19 @@ export default function App() {
   }, [incomingThreads, isAdmin]);
 
   useEffect(() => {
+    if (!isAdmin || selectedThread || !sortedIncomingThreads.length) return;
+    setSelectedThread(sortedIncomingThreads[0]);
+  }, [isAdmin, selectedThread, sortedIncomingThreads]);
+
+  useEffect(() => {
     if (!isAdmin || !selectedThread) return;
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
   }, [isAdmin, selectedThread]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchEngagementInsights();
+  }, [isAdmin, incomingThreads, virtualProfiles]);
 
   useEffect(() => {
     if (!memberSession || isAdmin) return;
@@ -537,6 +556,7 @@ export default function App() {
       seen_by_admin: false,
     });
     if (error) return setStatus(error.message);
+    recordEngagement('member_message', memberSession.id, selectedProfileId, { source: 'chat_input' });
     setNewMessage('');
     fetchMessages(selectedProfileId);
   }
@@ -581,10 +601,69 @@ export default function App() {
     try {
       const data = await selectRows('admin_threads', (q) => q.order('last_message_at', { ascending: false }));
       setIncomingThreads(data || []);
-      if (!selectedThread && data?.length) setSelectedThread(data[0]);
     } catch (error) {
       setStatus(error.message);
     }
+  }
+
+  async function recordEngagement(eventType, memberId, virtualProfileId, meta = {}) {
+    try {
+      await supabase.from('engagement_events').insert({
+        event_type: eventType,
+        member_id: memberId,
+        virtual_profile_id: virtualProfileId,
+        meta,
+      });
+    } catch {
+      // tablo kurulmamışsa akışı bozma
+    }
+  }
+
+  async function fetchEngagementInsights() {
+    if (!isAdmin) return;
+    const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString();
+    let rows = [];
+
+    const events = await supabase
+      .from('engagement_events')
+      .select('created_at, virtual_profile_id, event_type')
+      .eq('event_type', 'member_message')
+      .gte('created_at', since);
+
+    if (!events.error && events.data?.length) {
+      rows = events.data;
+    } else {
+      const fallback = await supabase
+        .from('messages')
+        .select('created_at, virtual_profile_id, sender_role')
+        .eq('sender_role', 'member')
+        .gte('created_at', since);
+      rows = (fallback.data || []).map((r) => ({ ...r, event_type: 'member_message' }));
+    }
+
+    const hourMap = new Map();
+    const profileMap = new Map();
+    rows.forEach((row) => {
+      const d = new Date(row.created_at);
+      const h = Number.isNaN(d.getTime()) ? 0 : d.getHours();
+      hourMap.set(h, (hourMap.get(h) || 0) + 1);
+      profileMap.set(row.virtual_profile_id, (profileMap.get(row.virtual_profile_id) || 0) + 1);
+    });
+
+    const topHours = [...hourMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([hour, count]) => ({ label: `${String(hour).padStart(2, '0')}:00`, count }));
+
+    const topProfiles = [...profileMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([profileId, count]) => ({
+        name: profileById[profileId]?.name || 'Bilinmeyen Profil',
+        count,
+      }));
+
+    setEngagementInsights({ topHours, topProfiles });
   }
 
   async function fetchThreadMessages(memberId, profileId) {
@@ -618,10 +697,12 @@ export default function App() {
       seen_by_admin: true,
     });
     if (error) return setStatus(error.message);
+    recordEngagement('admin_reply', selectedThread.member_id, selectedThread.virtual_profile_id, { source: 'admin_reply' });
     setAdminReply('');
     setAiSuggestions([]);
     fetchIncomingThreads();
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+    fetchEngagementInsights();
     setStatus('Yanıt gönderildi.');
   }
 
@@ -777,8 +858,9 @@ export default function App() {
               <h3>Mesaj Bekleyen Thread'ler</h3>
             </div>
             <div className="thread-queue modern-thread-queue" ref={threadQueueRef}>
-              {incomingThreads.map((thread) => {
+              {sortedIncomingThreads.map((thread) => {
                 const threadProfile = profileById[thread.virtual_profile_id];
+                const waitingReply = thread.last_sender_role === 'member';
                 return (
                   <button
                     key={`${thread.member_id}-${thread.virtual_profile_id}`}
@@ -806,6 +888,7 @@ export default function App() {
                     <span className="thread-copy">
                       <strong>{thread.member_username} → {thread.virtual_name}</strong>
                       {thread.last_message_content && <small>{thread.last_message_content}</small>}
+                      {waitingReply && <small className="pending-badge">Cevap bekliyor</small>}
                       {adminTypingByThread[threadKey(thread.member_id, thread.virtual_profile_id)] && <small>• yazıyor...</small>}
                     </span>
                     {adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)] > 0 && (
@@ -820,6 +903,22 @@ export default function App() {
               <h4>SLA Paneli</h4>
               <p><strong>Cevaplanmamış thread:</strong> {slaStats.waitingCount}</p>
               <p><strong>Ort. bekleme süresi:</strong> {slaStats.avgWaitMin.toFixed(1)} dk</p>
+            </div>
+
+            <div className="meta">
+              <h4>Engagement (7 Gün)</h4>
+              <p><strong>Yoğun saatler:</strong></p>
+              <ul className="insight-list">
+                {engagementInsights.topHours.map((h) => (
+                  <li key={h.label}>{h.label} → {h.count} mesaj</li>
+                ))}
+              </ul>
+              <p><strong>İlgi gören profiller:</strong></p>
+              <ul className="insight-list">
+                {engagementInsights.topProfiles.map((p) => (
+                  <li key={p.name}>{p.name} → {p.count} etkileşim</li>
+                ))}
+              </ul>
             </div>
 
             <div className="meta">

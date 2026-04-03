@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 
 const initialAuth = { username: '', password: '' };
@@ -9,6 +9,19 @@ export function useAuth({ adminPassword, setStatus }) {
   const [loading, setLoading] = useState(false);
   const [memberSession, setMemberSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedMode = window.localStorage.getItem('auth_mode');
+      const savedAdmin = window.localStorage.getItem('is_admin_session') === 'true';
+      const savedMember = window.localStorage.getItem('member_session');
+      if (savedMode === 'admin' || savedMode === 'user') setMode(savedMode);
+      if (savedAdmin) setIsAdmin(true);
+      if (savedMember) setMemberSession(JSON.parse(savedMember));
+    } catch {
+      // sessizce geç
+    }
+  }, []);
 
   async function signUp() {
     if (mode === 'admin') return setStatus('Admin kayıt olamaz.');
@@ -42,6 +55,8 @@ export function useAuth({ adminPassword, setStatus }) {
       }
       setIsAdmin(true);
       setMemberSession(null);
+      window.localStorage.setItem('is_admin_session', 'true');
+      window.localStorage.removeItem('member_session');
       setLoading(false);
       return setStatus('Admin girişi başarılı.');
     }
@@ -63,21 +78,30 @@ export function useAuth({ adminPassword, setStatus }) {
 
     setMemberSession(data);
     setIsAdmin(false);
+    window.localStorage.setItem('is_admin_session', 'false');
+    window.localStorage.setItem('member_session', JSON.stringify(data));
     setStatus('Giriş başarılı.');
   }
 
   function signOut(onAfterSignOut) {
     setMemberSession(null);
     setIsAdmin(false);
+    window.localStorage.removeItem('is_admin_session');
+    window.localStorage.removeItem('member_session');
     if (typeof onAfterSignOut === 'function') {
       onAfterSignOut();
     }
     setStatus('Çıkış yapıldı.');
   }
 
+  function toggleMode(nextMode) {
+    setMode(nextMode);
+    window.localStorage.setItem('auth_mode', nextMode);
+  }
+
   return {
     mode,
-    setMode,
+    setMode: toggleMode,
     authForm,
     setAuthForm,
     loading,
