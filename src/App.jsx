@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
+import { useAuth } from './hooks/useAuth';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
-const initialAuth = { username: '', password: '' };
 const initialProfile = { name: '', age: '', city: '', gender: '', hobbies: '', photo_url: '' };
 const initialMemberProfile = { age: '', hobbies: '', city: '', photo_url: '', status_emoji: '🙂' };
 
@@ -19,13 +19,20 @@ const THREAD_TAGS = ['sicak_lead', 'soguk', 'takip_edilecek'];
 const BULK_TEMPLATES = ['Merhaba! 👋', 'Naber, günün nasıl?', 'Müsaitsen yaz ✨'];
 
 export default function App() {
-  const [mode, setMode] = useState('user');
-  const [authForm, setAuthForm] = useState(initialAuth);
   const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const [memberSession, setMemberSession] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const {
+    mode,
+    setMode,
+    authForm,
+    setAuthForm,
+    loading,
+    memberSession,
+    isAdmin,
+    signIn,
+    signUp,
+    signOut,
+  } = useAuth({ adminPassword: ADMIN_PASSWORD, setStatus });
 
   const [virtualProfiles, setVirtualProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
@@ -448,73 +455,16 @@ export default function App() {
     setStatus('Profil bilgilerin kaydedildi.');
   }
 
-  async function signUp() {
-    if (mode === 'admin') return setStatus('Admin kayıt olamaz.');
-    if (!authForm.username || !authForm.password) return setStatus('Kullanıcı adı ve şifre zorunlu.');
-
-    setLoading(true);
-    setStatus('');
-
-    const { error } = await supabase.from('members').insert({
-      username: authForm.username.trim(),
-      password: authForm.password,
+  function handleSignOut() {
+    signOut(() => {
+      setSelectedProfileId(null);
+      setMessages([]);
+      setIncomingThreads([]);
+      setSelectedThread(null);
+      setUnreadByProfile({});
+      setAdminUnreadByThread({});
+      setTypingLabel('');
     });
-
-    setLoading(false);
-    if (error) return setStatus(`Kayıt başarısız: ${error.message}`);
-    setStatus('Kayıt başarılı. Giriş yapabilirsin.');
-  }
-
-  async function signIn() {
-    setLoading(true);
-    setStatus('');
-
-    if (mode === 'admin') {
-      if (!ADMIN_PASSWORD) {
-        setLoading(false);
-        return setStatus('VITE_ADMIN_PASSWORD eksik.');
-      }
-      if (authForm.password !== ADMIN_PASSWORD) {
-        setLoading(false);
-        return setStatus('Admin şifresi hatalı.');
-      }
-      setIsAdmin(true);
-      setMemberSession(null);
-      setLoading(false);
-      return setStatus('Admin girişi başarılı.');
-    }
-
-    if (!authForm.username || !authForm.password) {
-      setLoading(false);
-      return setStatus('Kullanıcı adı ve şifre girmen gerekiyor.');
-    }
-
-    const { data, error } = await supabase
-      .from('members')
-      .select('id, username')
-      .eq('username', authForm.username.trim())
-      .eq('password', authForm.password)
-      .single();
-
-    setLoading(false);
-    if (error || !data) return setStatus('Kullanıcı adı veya şifre hatalı.');
-
-    setMemberSession(data);
-    setIsAdmin(false);
-    setStatus('Giriş başarılı.');
-  }
-
-  function signOut() {
-    setMemberSession(null);
-    setIsAdmin(false);
-    setSelectedProfileId(null);
-    setMessages([]);
-    setIncomingThreads([]);
-    setSelectedThread(null);
-    setUnreadByProfile({});
-    setAdminUnreadByThread({});
-    setTypingLabel('');
-    setStatus('Çıkış yapıldı.');
   }
 
   async function fetchVirtualProfiles() {
@@ -766,7 +716,7 @@ export default function App() {
             {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
           </button>
         )}
-        {loggedIn && <button onClick={signOut}>Çıkış</button>}
+        {loggedIn && <button onClick={handleSignOut}>Çıkış</button>}
       </header>
 
       {!loggedIn ? (
