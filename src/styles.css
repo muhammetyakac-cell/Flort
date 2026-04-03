@@ -780,6 +780,135 @@ textarea {
   color: #9d174d;
 }
 
+/* Admin cockpit refresh */
+.layout-admin {
+  max-width: 100%;
+  padding: 0;
+}
+
+.layout-admin .topbar {
+  border-radius: 0;
+  margin-bottom: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-admin {
+  background: linear-gradient(90deg, #c40024, #e3002d);
+  border: none;
+  padding: 14px 24px;
+  box-shadow: 0 10px 28px rgba(173, 0, 33, 0.32);
+}
+
+.topbar-admin .brand {
+  color: #fff !important;
+}
+
+.topbar-admin .brand-icon {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
+.topbar-admin button:not(.linkish) {
+  width: auto;
+  background: rgba(18, 23, 35, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.admin-nav-pills {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-pill {
+  color: #fee2e2;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 9px 13px;
+  border-radius: 12px;
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  font-weight: 700;
+}
+
+.nav-pill.active {
+  background: #ffffff;
+  color: #b00025;
+}
+
+.admin-ops {
+  grid-template-columns: minmax(300px, 1fr) minmax(680px, 2fr) minmax(300px, 1fr);
+  gap: 18px;
+  padding: 16px 20px 20px;
+  min-height: calc(100vh - 84px);
+  background: linear-gradient(180deg, #eef2f7 0%, #e8edf6 100%);
+}
+
+.admin-ops .card {
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #d8e0eb;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.panel-head {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #0f7a2a, #0c5f20);
+  color: #ecfdf5;
+  margin-bottom: 12px;
+}
+
+.panel-head h3 {
+  margin: 0;
+  color: inherit;
+  font-size: 1.05rem;
+}
+
+.admin-center-head {
+  background: linear-gradient(135deg, #3b0764, #4c1d95);
+  border: none;
+  color: #ede9fe;
+}
+
+.admin-center-head h3,
+.admin-center-head small {
+  color: inherit;
+}
+
+.admin-center-head .drawer-toggle {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.admin-ops .modern-thread-queue {
+  max-height: calc(100vh - 305px);
+  background: #eef3f9;
+}
+
+.admin-ops .admin-chat-box {
+  height: calc(100vh - 330px);
+  background: #fefefe;
+}
+
+@media (max-width: 1200px) {
+  .layout-admin .topbar {
+    border-radius: 0;
+  }
+
+  .admin-ops {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+}
+
 .drawer-toggle,
 .icon-dice {
   background: #ffffff;

@@ -708,15 +708,24 @@ export default function App() {
   }
 
   return (
-    <div className="layout">
-      <header className="topbar">
+    <div className={`layout ${isAdmin ? 'layout-admin' : ''}`}>
+      <header className={`topbar ${isAdmin ? 'topbar-admin' : ''}`}>
         <h1 className="brand"><span className="brand-icon">✦</span> Flort Chat</h1>
-        {!loggedIn && (
-          <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
-            {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
-          </button>
-        )}
-        {loggedIn && <button onClick={handleSignOut}>Çıkış</button>}
+        <div className="topbar-actions">
+          {isAdmin && loggedIn && (
+            <div className="admin-nav-pills">
+              <span className="nav-pill active">Chat</span>
+              <span className="nav-pill">Stats</span>
+              <span className="nav-pill">Settings</span>
+            </div>
+          )}
+          {!loggedIn && (
+            <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
+              {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
+            </button>
+          )}
+          {loggedIn && <button onClick={handleSignOut}>Çıkış</button>}
+        </div>
       </header>
 
       {!loggedIn ? (
@@ -750,9 +759,9 @@ export default function App() {
           </div>
         </section>
       ) : isAdmin ? (
-        <main className="admin-modern compact-shell">
+        <main className="admin-modern compact-shell admin-ops">
           <aside className="admin-left card">
-            <div className="panel-title-row">
+            <div className="panel-title-row panel-head">
               <h3>Mesaj Bekleyen Thread'ler</h3>
             </div>
             <div className="thread-queue modern-thread-queue" ref={threadQueueRef}>
@@ -813,7 +822,7 @@ export default function App() {
           </aside>
 
           <section className="admin-center card">
-            <div className="chat-header">
+            <div className="chat-header admin-center-head">
               <div>
                 <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
                 <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
