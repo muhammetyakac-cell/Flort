@@ -55,6 +55,7 @@ export default function App() {
   const [adminDrawerOpen, setAdminDrawerOpen] = useState(true);
   const [selectedThreadKeys, setSelectedThreadKeys] = useState({});
   const [bulkTemplate, setBulkTemplate] = useState(BULK_TEMPLATES[0]);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -149,6 +150,7 @@ export default function App() {
   }
 
   function playNotificationSound() {
+    if (!notificationSoundEnabled) return;
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = ctx.createOscillator();
@@ -168,6 +170,16 @@ export default function App() {
       // Sessizce geç
     }
   }
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem('admin_notification_sound_enabled');
+    if (saved === null) return;
+    setNotificationSoundEnabled(saved === 'true');
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('admin_notification_sound_enabled', String(notificationSoundEnabled));
+  }, [notificationSoundEnabled]);
 
   function getAudioUrl(content) {
     const clean = (content || '').trim();
@@ -873,6 +885,18 @@ export default function App() {
 
           {adminDrawerOpen && (
             <aside className="admin-right card drawer-panel">
+              <div className="meta settings-panel">
+                <h4>Settings</h4>
+                <label className="toggle-row">
+                  <span>Bildirim sesi</span>
+                  <input
+                    type="checkbox"
+                    checked={notificationSoundEnabled}
+                    onChange={(e) => setNotificationSoundEnabled(e.target.checked)}
+                  />
+                </label>
+              </div>
+
               {selectedThreadProfile && (
                 <div className="meta selected-profile-meta">
                   <h4>Seçili Profil Bilgileri</h4>
