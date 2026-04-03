@@ -476,15 +476,25 @@ create table if not exists public.engagement_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.thread_quick_facts (
+  member_id uuid not null references public.members(id) on delete cascade,
+  virtual_profile_id uuid not null references public.virtual_profiles(id) on delete cascade,
+  notes text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (member_id, virtual_profile_id)
+);
+
 alter table public.thread_events enable row level security;
 alter table public.presence_snapshots enable row level security;
 alter table public.kpi_snapshots_daily enable row level security;
 alter table public.engagement_events enable row level security;
+alter table public.thread_quick_facts enable row level security;
 
 drop policy if exists "thread_events_all_anon" on public.thread_events;
 drop policy if exists "presence_snapshots_all_anon" on public.presence_snapshots;
 drop policy if exists "kpi_snapshots_daily_all_anon" on public.kpi_snapshots_daily;
 drop policy if exists "engagement_events_all_anon" on public.engagement_events;
+drop policy if exists "thread_quick_facts_all_anon" on public.thread_quick_facts;
 
 create policy "thread_events_all_anon"
   on public.thread_events for all
@@ -506,6 +516,12 @@ create policy "kpi_snapshots_daily_all_anon"
 
 create policy "engagement_events_all_anon"
   on public.engagement_events for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy "thread_quick_facts_all_anon"
+  on public.thread_quick_facts for all
   to anon, authenticated
   using (true)
   with check (true);

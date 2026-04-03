@@ -36,11 +36,13 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - `member_profiles.status_emoji` kolonu
 - `profile-images` storage bucket + policy'ler
 - `engagement_events` tablosu (admin analytics için)
+- `thread_quick_facts` tablosu (thread bazlı hızlı not defteri)
 
 ## SQL Çalıştırma Notu (Önemli)
 - Supabase SQL Editor'e **git diff çıktısı** (`@@`, `+++`, `---`) yapıştırmayın.
 - Direkt olarak `supabase/schema.sql` dosyasının ham içeriğini çalıştırın.
 - Sadece engagement analytics kurmak isterseniz `supabase/migrations/20260403_engagement_events.sql` dosyasını tek başına çalıştırabilirsiniz.
+- Sadece quick facts özelliğini kurmak isterseniz `supabase/migrations/20260403_thread_quick_facts.sql` dosyasını tek başına çalıştırabilirsiniz.
 
 ## Önemli Not (Güvenlik)
 Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon erişim açıktır.

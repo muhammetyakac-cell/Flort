@@ -57,6 +57,15 @@ export default function App() {
   const [bulkTemplate, setBulkTemplate] = useState(BULK_TEMPLATES[0]);
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
   const [engagementInsights, setEngagementInsights] = useState({ topHours: [], topProfiles: [] });
+  const [adminTab, setAdminTab] = useState('chat');
+  const [quickFactsText, setQuickFactsText] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [profileSearch, setProfileSearch] = useState('');
+  const [likedProfiles, setLikedProfiles] = useState({});
+  const [heartedProfiles, setHeartedProfiles] = useState({});
+  const [wavedProfiles, setWavedProfiles] = useState({});
+  const [userView, setUserView] = useState('discover');
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -110,6 +119,16 @@ export default function App() {
     a.forEach((item) => { if (b.has(item)) common += 1; });
     return Math.round((common / Math.max(a.size, b.size)) * 100);
   }, [selectedProfile, memberProfile]);
+
+  const discoverProfiles = useMemo(() => {
+    return sortedProfiles.filter((profile) => {
+      const cityOk = cityFilter ? (profile.city || '').toLowerCase().includes(cityFilter.toLowerCase()) : true;
+      const genderOk = genderFilter === 'all' ? true : (profile.gender || '').toLowerCase() === genderFilter.toLowerCase();
+      const text = `${profile.name || ''} ${profile.city || ''} ${profile.hobbies || ''}`.toLowerCase();
+      const searchOk = profileSearch ? text.includes(profileSearch.toLowerCase()) : true;
+      return cityOk && genderOk && searchOk;
+    });
+  }, [sortedProfiles, cityFilter, genderFilter, profileSearch]);
 
   function threadKey(memberId, profileId) {
     return `${memberId}::${profileId}`;
@@ -205,9 +224,9 @@ export default function App() {
   }, [loggedIn, isAdmin]);
 
   useEffect(() => {
-    if (!memberSession || !selectedProfileId || isAdmin) return;
+    if (!memberSession || !selectedProfileId || isAdmin || userView !== 'chat') return;
     fetchMessages(selectedProfileId);
-  }, [memberSession, selectedProfileId, isAdmin]);
+  }, [memberSession, selectedProfileId, isAdmin, userView]);
 
   useEffect(() => {
     if (!selectedProfileId || isAdmin) return;
@@ -249,6 +268,7 @@ export default function App() {
   useEffect(() => {
     if (!isAdmin || !selectedThread) return;
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+    fetchQuickFacts(selectedThread.member_id, selectedThread.virtual_profile_id);
   }, [isAdmin, selectedThread]);
 
   useEffect(() => {
@@ -259,6 +279,11 @@ export default function App() {
   useEffect(() => {
     if (!memberSession || isAdmin) return;
     fetchOwnProfile();
+  }, [memberSession, isAdmin]);
+
+  useEffect(() => {
+    if (!memberSession || isAdmin) return;
+    setUserView('discover');
   }, [memberSession, isAdmin]);
 
   useEffect(() => {
@@ -495,6 +520,7 @@ export default function App() {
       setUnreadByProfile({});
       setAdminUnreadByThread({});
       setTypingLabel('');
+      setUserView('discover');
     });
   }
 
@@ -686,6 +712,35 @@ export default function App() {
       .eq('seen_by_admin', false);
   }
 
+  async function fetchQuickFacts(memberId, profileId) {
+    const { data, error } = await supabase
+      .from('thread_quick_facts')
+      .select('notes')
+      .eq('member_id', memberId)
+      .eq('virtual_profile_id', profileId)
+      .maybeSingle();
+    if (error) return;
+    setQuickFactsText(data?.notes || '');
+  }
+
+  async function saveQuickFacts() {
+    if (!selectedThread) return;
+    const { error } = await supabase
+      .from('thread_quick_facts')
+      .upsert({
+        member_id: selectedThread.member_id,
+        virtual_profile_id: selectedThread.virtual_profile_id,
+        notes: quickFactsText,
+      }, { onConflict: 'member_id,virtual_profile_id' });
+    if (error) return setStatus(error.message);
+    setStatus('Quick Facts kaydedildi.');
+  }
+
+  function openChatWithProfile(profileId) {
+    setSelectedProfileId(profileId);
+    setUserView('chat');
+  }
+
   async function sendAdminReply() {
     if (!selectedThread || !adminReply.trim()) return;
     const { error } = await supabase.from('messages').insert({
@@ -807,9 +862,9 @@ export default function App() {
         <div className="topbar-actions">
           {isAdmin && loggedIn && (
             <div className="admin-nav-pills">
-              <span className="nav-pill active">Chat</span>
-              <span className="nav-pill">Stats</span>
-              <span className="nav-pill">Settings</span>
+              <button type="button" className={`nav-pill ${adminTab === 'chat' ? 'active' : ''}`} onClick={() => setAdminTab('chat')}>Chat</button>
+              <button type="button" className={`nav-pill ${adminTab === 'stats' ? 'active' : ''}`} onClick={() => setAdminTab('stats')}>Stats</button>
+              <button type="button" className={`nav-pill ${adminTab === 'settings' ? 'active' : ''}`} onClick={() => setAdminTab('settings')}>Settings</button>
             </div>
           )}
           {!loggedIn && (
@@ -933,59 +988,74 @@ export default function App() {
           </aside>
 
           <section className="admin-center card">
-            <div className="chat-header admin-center-head">
-              <div>
-                <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
-                <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
-              </div>
-              <select value={selectedThread?.status_tag || 'takip_edilecek'} onChange={(e) => updateSelectedThreadTag(e.target.value)} style={{ width: 'auto' }}>
-                {THREAD_TAGS.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
-              </select>
-              <button type="button" className="drawer-toggle" onClick={() => setAdminDrawerOpen((v) => !v)}>
-                {adminDrawerOpen ? 'Paneli Gizle' : 'Paneli Aç'}
-              </button>
-            </div>
-
-            <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
-              {threadMessages.map((msg) => {
-                const audioUrl = getAudioUrl(msg.content);
-                return (
-                  <div key={msg.id} className={`msg ${msg.sender_role}`}>
-                    <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>
-                    {audioUrl ? <audio controls src={audioUrl} className="audio-player" /> : <p>{msg.content}</p>}
-                    <small>
-                      {formatTime(msg.created_at)}
-                      {msg.sender_role === 'virtual' ? <span className={`ticks ${msg.seen_by_member ? 'seen' : ''}`} title={msg.seen_by_member_at ? `Görüldü: ${formatTime(msg.seen_by_member_at)}` : `Teslim: ${formatTime(msg.created_at)}`}>✓✓</span> : ''}
-                    </small>
+            {adminTab === 'chat' && (
+              <>
+                <div className="chat-header admin-center-head">
+                  <div>
+                    <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
+                    <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
                   </div>
-                );
-              })}
-            </div>
+                  <select value={selectedThread?.status_tag || 'takip_edilecek'} onChange={(e) => updateSelectedThreadTag(e.target.value)} style={{ width: 'auto' }}>
+                    {THREAD_TAGS.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                  </select>
+                  <button type="button" className="drawer-toggle" onClick={() => setAdminDrawerOpen((v) => !v)}>
+                    {adminDrawerOpen ? 'Paneli Gizle' : 'Paneli Aç'}
+                  </button>
+                </div>
 
-            <div className="quick-replies">
-              {QUICK_REPLIES.map((reply) => (
-                <button key={reply} type="button" className="chip" onClick={() => setAdminReply((prev) => `${prev ? `${prev}
-` : ''}${reply}`)}>{reply}</button>
-              ))}
-              <button type="button" className="chip ai" onClick={fetchAiSuggestions} disabled={loadingSuggestions}>{loadingSuggestions ? 'AI düşünüyor...' : 'AI Önerisi Getir'}</button>
-            </div>
+                <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
+                  {threadMessages.map((msg) => {
+                    const audioUrl = getAudioUrl(msg.content);
+                    return (
+                      <div key={msg.id} className={`msg ${msg.sender_role}`}>
+                        <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>
+                        {audioUrl ? <audio controls src={audioUrl} className="audio-player" /> : <p>{msg.content}</p>}
+                        <small>
+                          {formatTime(msg.created_at)}
+                          {msg.sender_role === 'virtual' ? <span className={`ticks ${msg.seen_by_member ? 'seen' : ''}`} title={msg.seen_by_member_at ? `Görüldü: ${formatTime(msg.seen_by_member_at)}` : `Teslim: ${formatTime(msg.created_at)}`}>✓✓</span> : ''}
+                        </small>
+                      </div>
+                    );
+                  })}
+                </div>
 
-            {!!aiSuggestions.length && (
-              <div className="ai-suggestions">
-                {aiSuggestions.map((suggestion) => (
-                  <button key={suggestion} type="button" className="chip" onClick={() => setAdminReply(suggestion)}>{suggestion}</button>
-                ))}
+                <div className="quick-replies">
+                  {QUICK_REPLIES.map((reply) => (
+                    <button key={reply} type="button" className="chip" onClick={() => setAdminReply((prev) => `${prev ? `${prev}\n` : ''}${reply}`)}>{reply}</button>
+                  ))}
+                  <button type="button" className="chip ai" onClick={fetchAiSuggestions} disabled={loadingSuggestions}>{loadingSuggestions ? 'AI düşünüyor...' : 'AI Önerisi Getir'}</button>
+                </div>
+
+                {!!aiSuggestions.length && (
+                  <div className="ai-suggestions">
+                    {aiSuggestions.map((suggestion) => (
+                      <button key={suggestion} type="button" className="chip" onClick={() => setAdminReply(suggestion)}>{suggestion}</button>
+                    ))}
+                  </div>
+                )}
+
+                <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} />
+                <button onClick={sendAdminReply}>Yanıt Gönder</button>
+              </>
+            )}
+
+            {adminTab === 'stats' && (
+              <div className="meta">
+                <h3>Stats Dashboard</h3>
+                <p><strong>Yoğun Saatler:</strong></p>
+                <ul className="insight-list">
+                  {engagementInsights.topHours.map((h) => <li key={h.label}>{h.label} → {h.count}</li>)}
+                </ul>
+                <p><strong>En Çok İlgi Gören Profiller:</strong></p>
+                <ul className="insight-list">
+                  {engagementInsights.topProfiles.map((p) => <li key={p.name}>{p.name} → {p.count}</li>)}
+                </ul>
               </div>
             )}
 
-            <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} />
-            <button onClick={sendAdminReply}>Yanıt Gönder</button>
-          </section>
-
-          {adminDrawerOpen && (
-            <aside className="admin-right card drawer-panel">
-              <div className="meta settings-panel">
-                <h4>Settings</h4>
+            {adminTab === 'settings' && (
+              <div className="meta settings-page">
+                <h3>Settings</h3>
                 <label className="toggle-row">
                   <span>Bildirim sesi</span>
                   <input
@@ -995,7 +1065,11 @@ export default function App() {
                   />
                 </label>
               </div>
+            )}
+          </section>
 
+          {adminDrawerOpen && adminTab === 'chat' && (
+            <aside className="admin-right card drawer-panel">
               {selectedThreadProfile && (
                 <div className="meta selected-profile-meta">
                   <h4>Seçili Profil Bilgileri</h4>
@@ -1006,6 +1080,16 @@ export default function App() {
                   <p><strong>Hobiler:</strong> {selectedThreadProfile.hobbies || '-'}</p>
                 </div>
               )}
+
+              <div className="meta">
+                <h4>Quick Facts</h4>
+                <textarea
+                  placeholder="Kullanıcı hakkında önemli notlar (şehir, iş, sınırlar, tercih vb.)"
+                  value={quickFactsText}
+                  onChange={(e) => setQuickFactsText(e.target.value)}
+                />
+                <button onClick={saveQuickFacts}>Quick Facts Kaydet</button>
+              </div>
 
               <div className="panel-title-row panel-divider">
                 <h3>Sanal Profil Oluştur</h3>
@@ -1049,8 +1133,51 @@ export default function App() {
             </aside>
           )}
         </main>
+      ) : userView === 'discover' ? (
+        <main className="dashboard compact-shell discover-shell">
+          <section className="card discover-hero">
+            <h2>Keşfet</h2>
+            <p>Şehir ve cinsiyet filtresiyle profilleri incele. Beğendiğin kişiye emoji gönder veya mesaj başlat.</p>
+            <div className="discover-filters">
+              <input placeholder="Şehir ara" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} />
+              <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)}>
+                <option value="all">Tümü</option>
+                <option value="Kadın">Kadın</option>
+                <option value="Erkek">Erkek</option>
+              </select>
+              <input placeholder="İsim / hobi ara" value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} />
+              <button type="button" onClick={() => setUserView('chat')}>Mesaj Kutuma Git</button>
+            </div>
+          </section>
+
+          <section className="discover-grid">
+            {discoverProfiles.map((profile) => (
+              <article key={profile.id} className="card discover-card">
+                {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="discover-photo" /> : <div className="discover-photo-fallback">{profile.name?.slice(0, 1)}</div>}
+                <h3>{profile.name}, {profile.age}</h3>
+                <p>{profile.city || 'Türkiye'} • {profile.gender || '-'}</p>
+                <small>{profile.hobbies || 'Hobi bilgisi yok.'}</small>
+                <div className="discover-actions">
+                  <button type="button" onClick={() => setHeartedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] }))}>{heartedProfiles[profile.id] ? '💘 Kalp Atıldı' : '💘 Kalp At'}</button>
+                  <button type="button" onClick={() => setWavedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] }))}>{wavedProfiles[profile.id] ? '👋 El Sallandı' : '👋 El Salla'}</button>
+                  <button type="button" onClick={() => setLikedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] }))}>{likedProfiles[profile.id] ? '👍 Beğenildi' : '👍 Beğen'}</button>
+                  <button type="button" className="cta-message" onClick={() => openChatWithProfile(profile.id)}>Mesaj At</button>
+                </div>
+              </article>
+            ))}
+          </section>
+        </main>
       ) : (
-        <main className="dashboard user-grid user-dashboard compact-shell">
+        <main className="dashboard user-grid user-dashboard user-chat-layout compact-shell">
+          <aside className="card">
+            <h3>Navigasyon</h3>
+            <button type="button" onClick={() => setUserView('discover')}>Keşfet Sayfasına Dön</button>
+            <div className="meta">
+              <p><strong>Beğenilen:</strong> {Object.values(likedProfiles).filter(Boolean).length}</p>
+              <p><strong>Kalp:</strong> {Object.values(heartedProfiles).filter(Boolean).length}</p>
+              <p><strong>El Sallama:</strong> {Object.values(wavedProfiles).filter(Boolean).length}</p>
+            </div>
+          </aside>
           <aside className="card">
             <h3>Sohbetler</h3>
             <div className="profile-list" ref={profileListRef}>

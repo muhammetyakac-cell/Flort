@@ -832,6 +832,7 @@ textarea {
 }
 
 .nav-pill {
+  width: auto;
   color: #fee2e2;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -912,6 +913,14 @@ textarea {
     grid-template-columns: 1fr;
     padding: 12px;
   }
+
+  .discover-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .user-chat-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .drawer-toggle,
@@ -938,6 +947,66 @@ textarea {
 
 .settings-panel {
   margin-bottom: 12px;
+}
+
+.settings-page {
+  max-width: 520px;
+}
+
+.discover-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.discover-hero h2 {
+  margin: 0 0 8px;
+}
+
+.discover-filters {
+  display: grid;
+  grid-template-columns: 1fr 180px 1fr auto;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.discover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.discover-card {
+  display: grid;
+  gap: 8px;
+}
+
+.discover-photo,
+.discover-photo-fallback {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 14px;
+}
+
+.discover-photo-fallback {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #fbcfe8, #bfdbfe);
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.discover-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.discover-actions .cta-message {
+  background: linear-gradient(135deg, #db2777, #7c3aed);
+}
+
+.user-chat-layout {
+  grid-template-columns: minmax(180px, .65fr) minmax(230px, .95fr) minmax(560px, 1.8fr) minmax(260px, 1fr);
 }
 
 .toggle-row {
