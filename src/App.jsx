@@ -78,6 +78,7 @@ export default function App() {
   const [userView, setUserView] = useState('discover');
   const [registeredMembers, setRegisteredMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [selectedMemberProfile, setSelectedMemberProfile] = useState(null);
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -281,6 +282,7 @@ export default function App() {
     if (!isAdmin || !selectedThread) return;
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
     fetchQuickFacts(selectedThread.member_id, selectedThread.virtual_profile_id);
+    fetchMemberProfile(selectedThread.member_id);
   }, [isAdmin, selectedThread]);
 
   useEffect(() => {
@@ -841,6 +843,16 @@ export default function App() {
     setQuickFactsText(data?.notes || '');
   }
 
+  async function fetchMemberProfile(memberId) {
+    const { data, error } = await supabase
+      .from('member_profiles')
+      .select('age, hobbies, city, photo_url, status_emoji')
+      .eq('member_id', memberId)
+      .maybeSingle();
+    if (error) return setSelectedMemberProfile(null);
+    setSelectedMemberProfile(data || null);
+  }
+
   async function saveQuickFacts() {
     if (!selectedThread) return;
     const { error } = await supabase
@@ -1055,14 +1067,15 @@ export default function App() {
       ) : isAdmin ? (
         <main className="admin-modern compact-shell admin-ops">
           <aside className="admin-left card">
-            {selectedThreadProfile && (
+            {selectedThread && (
               <div className="meta selected-profile-meta left-profile-meta">
-                <h4>Aktif Konuşulan Profil</h4>
-                {selectedThreadProfile.photo_url && <img src={selectedThreadProfile.photo_url} alt={selectedThreadProfile.name} className="profile-photo" />}
-                <p><strong>Ad:</strong> {selectedThreadProfile.name}</p>
-                <p><strong>Yaş:</strong> {selectedThreadProfile.age}</p>
-                <p><strong>Şehir:</strong> {selectedThreadProfile.city || '-'}</p>
-                <p><strong>Hobiler:</strong> {selectedThreadProfile.hobbies || '-'}</p>
+                <h4>Aktif Konuşan Kullanıcı</h4>
+                {selectedMemberProfile?.photo_url && <img src={selectedMemberProfile.photo_url} alt={selectedThread.member_username} className="profile-photo" />}
+                <p><strong>Kullanıcı Adı:</strong> {selectedThread.member_username}</p>
+                <p><strong>Yaş:</strong> {selectedMemberProfile?.age || '-'}</p>
+                <p><strong>Şehir:</strong> {selectedMemberProfile?.city || '-'}</p>
+                <p><strong>Hobiler:</strong> {selectedMemberProfile?.hobbies || '-'}</p>
+                <p><strong>Durum:</strong> {selectedMemberProfile?.status_emoji || '🙂'}</p>
               </div>
             )}
 
