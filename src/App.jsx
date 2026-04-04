@@ -73,6 +73,7 @@ export default function App() {
   const [cityFilter, setCityFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('all');
   const [profileSearch, setProfileSearch] = useState('');
+  const [discoverSort, setDiscoverSort] = useState('match');
   const [likedProfiles, setLikedProfiles] = useState({});
   const [heartedProfiles, setHeartedProfiles] = useState({});
   const [wavedProfiles, setWavedProfiles] = useState({});
@@ -141,14 +142,29 @@ export default function App() {
   }, [selectedProfile, memberProfile]);
 
   const discoverProfiles = useMemo(() => {
-    return sortedProfiles.filter((profile) => {
+    const filtered = sortedProfiles.filter((profile) => {
       const cityOk = cityFilter ? (profile.city || '').toLowerCase().includes(cityFilter.toLowerCase()) : true;
       const genderOk = genderFilter === 'all' ? true : (profile.gender || '').toLowerCase() === genderFilter.toLowerCase();
       const text = `${profile.name || ''} ${profile.city || ''} ${profile.hobbies || ''}`.toLowerCase();
       const searchOk = profileSearch ? text.includes(profileSearch.toLowerCase()) : true;
       return cityOk && genderOk && searchOk;
     });
-  }, [sortedProfiles, cityFilter, genderFilter, profileSearch]);
+    const score = (profile) => {
+      const a = new Set((profile.hobbies || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean));
+      const b = new Set((memberProfile.hobbies || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean));
+      if (!a.size || !b.size) return 0;
+      let common = 0;
+      a.forEach((item) => { if (b.has(item)) common += 1; });
+      return Math.round((common / Math.max(a.size, b.size)) * 100);
+    };
+
+    return filtered.sort((p1, p2) => {
+      if (discoverSort === 'newest') return new Date(p2.created_at || 0) - new Date(p1.created_at || 0);
+      if (discoverSort === 'age_asc') return Number(p1.age || 0) - Number(p2.age || 0);
+      if (discoverSort === 'online') return Number(!!onlineProfiles[p2.id]) - Number(!!onlineProfiles[p1.id]);
+      return score(p2) - score(p1);
+    });
+  }, [sortedProfiles, cityFilter, genderFilter, profileSearch, memberProfile.hobbies, discoverSort, onlineProfiles]);
 
   function threadKey(memberId, profileId) {
     return `${memberId}::${profileId}`;
@@ -1374,8 +1390,8 @@ export default function App() {
       ) : userView === 'discover' ? (
         <main className="dashboard compact-shell discover-shell">
           <section className="card discover-hero">
-            <h2>Keşfet</h2>
-            <p>Şehir ve cinsiyet filtresiyle profilleri incele. Beğendiğin kişiye emoji gönder veya mesaj başlat.</p>
+            <h2>Discover 2026 ✨</h2>
+            <p>Şehir, cinsiyet ve ilgi alanlarına göre profilleri keşfet. Hızlı aksiyonlarla sohbet başlat.</p>
             <div className="discover-filters">
               <input placeholder="Şehir ara" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} />
               <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)}>
@@ -1384,13 +1400,28 @@ export default function App() {
                 <option value="Erkek">Erkek</option>
               </select>
               <input placeholder="İsim / hobi ara" value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} />
+              <select value={discoverSort} onChange={(e) => setDiscoverSort(e.target.value)}>
+                <option value="match">Uyuma Göre</option>
+                <option value="online">Online</option>
+                <option value="newest">Yeni Eklenen</option>
+                <option value="age_asc">Yaş (Artan)</option>
+              </select>
               <button type="button" onClick={() => setUserView('chat')}>Mesaj Kutuma Git</button>
+            </div>
+            <div className="discover-meta-row">
+              <span className="mini-pill">{discoverProfiles.length} profil bulundu</span>
+              <span className="mini-pill">Trend: kısa mesaj + hızlı etkileşim</span>
             </div>
           </section>
 
           <section className="discover-grid">
             {discoverProfiles.map((profile) => (
               <article key={profile.id} className="card discover-card">
+                <div className="discover-topline">
+                  <span className={`online-dot ${onlineProfiles[profile.id] ? 'on' : ''}`} />
+                  <span>{onlineProfiles[profile.id] ? 'Online' : 'Offline'}</span>
+                  <span className="verified-pill">✔ doğrulandı</span>
+                </div>
                 {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="discover-photo" /> : <div className="discover-photo-fallback">{profile.name?.slice(0, 1)}</div>}
                 <h3>{profile.name}, {profile.age}</h3>
                 <p>{profile.city || 'Türkiye'} • {profile.gender || '-'}</p>
