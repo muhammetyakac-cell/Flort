@@ -22,6 +22,7 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_ADMIN_PASSWORD`
+   - `VITE_ADMIN_PASSWORD2` (opsiyonel, ikinci admin girişi için)
    - `VITE_OPENAI_API_KEY` (opsiyonel, AI önerileri için)
 2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski şemalardan migration + storage bucket/policy kurulumu yapar, tekrar çalıştırılabilir)
 3. Uygulamayı başlat:
@@ -55,6 +56,7 @@ Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon e
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
   - `VITE_ADMIN_PASSWORD`
+  - `VITE_ADMIN_PASSWORD2` (opsiyonel)
    - `VITE_OPENAI_API_KEY` (opsiyonel, AI önerileri için)
 
 

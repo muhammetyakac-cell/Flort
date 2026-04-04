@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 
 const initialAuth = { username: '', password: '' };
 
-export function useAuth({ adminPassword, setStatus }) {
+export function useAuth({ adminPasswords = [], setStatus }) {
   const [mode, setMode] = useState('user');
   const [authForm, setAuthForm] = useState(initialAuth);
   const [loading, setLoading] = useState(false);
@@ -45,11 +45,12 @@ export function useAuth({ adminPassword, setStatus }) {
     setStatus('');
 
     if (mode === 'admin') {
-      if (!adminPassword) {
+      const validAdminPasswords = adminPasswords.filter(Boolean);
+      if (!validAdminPasswords.length) {
         setLoading(false);
-        return setStatus('VITE_ADMIN_PASSWORD eksik.');
+        return setStatus('VITE_ADMIN_PASSWORD / VITE_ADMIN_PASSWORD2 eksik.');
       }
-      if (authForm.password !== adminPassword) {
+      if (!validAdminPasswords.includes(authForm.password)) {
         setLoading(false);
         return setStatus('Admin şifresi hatalı.');
       }

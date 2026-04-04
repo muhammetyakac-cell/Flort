@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { useAuth } from './hooks/useAuth';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+const ADMIN_PASSWORD2 = import.meta.env.VITE_ADMIN_PASSWORD2;
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 const initialProfile = { name: '', age: '', city: '', gender: '', hobbies: '', photo_url: '' };
@@ -32,7 +33,7 @@ export default function App() {
     signIn,
     signUp,
     signOut,
-  } = useAuth({ adminPassword: ADMIN_PASSWORD, setStatus });
+  } = useAuth({ adminPasswords: [ADMIN_PASSWORD, ADMIN_PASSWORD2], setStatus });
 
   const [virtualProfiles, setVirtualProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
