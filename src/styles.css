@@ -1010,7 +1010,28 @@ textarea {
 }
 
 .user-chat-layout {
-  grid-template-columns: minmax(180px, .65fr) minmax(230px, .95fr) minmax(560px, 1.8fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(230px, .95fr) minmax(560px, 1.8fr) minmax(260px, 1fr);
+}
+
+.user-nav-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.user-nav-strip button {
+  width: auto;
+  border-radius: 12px;
+}
+
+.mini-stat {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  color: #3730a3;
 }
 
 .stats-dashboard {

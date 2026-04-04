@@ -601,6 +601,29 @@ export default function App() {
     fetchMessages(selectedProfileId);
   }
 
+  async function sendReaction(profileId, reactionType) {
+    if (!memberSession || !profileId) return;
+    const templates = {
+      heart: '💘 Kalp gönderdim.',
+      wave: '👋 Selam, sana el salladım.',
+      like: '👍 Profilini beğendim.',
+    };
+    const content = templates[reactionType];
+    if (!content) return;
+
+    const { error } = await supabase.from('messages').insert({
+      member_id: memberSession.id,
+      virtual_profile_id: profileId,
+      sender_role: 'member',
+      content,
+      seen_by_member: true,
+      seen_by_admin: false,
+    });
+    if (error) return setStatus(error.message);
+    recordEngagement('member_message', memberSession.id, profileId, { source: `reaction_${reactionType}` });
+    setStatus('Etkileşim mesajı gönderildi.');
+  }
+
   async function createVirtualProfile() {
     const auto = buildRandomVirtualProfile();
     const payload = {
@@ -957,6 +980,16 @@ export default function App() {
         </div>
       </header>
 
+      {loggedIn && !isAdmin && (
+        <section className="user-nav-strip card">
+          <button type="button" onClick={() => setUserView('discover')}>Keşfet</button>
+          <button type="button" onClick={() => setUserView('chat')}>Mesaj Kutusu</button>
+          <span className="mini-stat">👍 {Object.values(likedProfiles).filter(Boolean).length}</span>
+          <span className="mini-stat">💘 {Object.values(heartedProfiles).filter(Boolean).length}</span>
+          <span className="mini-stat">👋 {Object.values(wavedProfiles).filter(Boolean).length}</span>
+        </section>
+      )}
+
       {!loggedIn ? (
         <section className="auth-hero">
           <div className="auth-card">
@@ -1255,9 +1288,9 @@ export default function App() {
                 <p>{profile.city || 'Türkiye'} • {profile.gender || '-'}</p>
                 <small>{profile.hobbies || 'Hobi bilgisi yok.'}</small>
                 <div className="discover-actions">
-                  <button type="button" onClick={() => setHeartedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] }))}>{heartedProfiles[profile.id] ? '💘 Kalp Atıldı' : '💘 Kalp At'}</button>
-                  <button type="button" onClick={() => setWavedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] }))}>{wavedProfiles[profile.id] ? '👋 El Sallandı' : '👋 El Salla'}</button>
-                  <button type="button" onClick={() => setLikedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] }))}>{likedProfiles[profile.id] ? '👍 Beğenildi' : '👍 Beğen'}</button>
+                  <button type="button" onClick={() => { setHeartedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'heart'); }}>{heartedProfiles[profile.id] ? '💘 Kalp Atıldı' : '💘 Kalp At'}</button>
+                  <button type="button" onClick={() => { setWavedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'wave'); }}>{wavedProfiles[profile.id] ? '👋 El Sallandı' : '👋 El Salla'}</button>
+                  <button type="button" onClick={() => { setLikedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'like'); }}>{likedProfiles[profile.id] ? '👍 Beğenildi' : '👍 Beğen'}</button>
                   <button type="button" className="cta-message" onClick={() => openChatWithProfile(profile.id)}>Mesaj At</button>
                 </div>
               </article>
@@ -1266,15 +1299,6 @@ export default function App() {
         </main>
       ) : (
         <main className="dashboard user-grid user-dashboard user-chat-layout compact-shell">
-          <aside className="card">
-            <h3>Navigasyon</h3>
-            <button type="button" onClick={() => setUserView('discover')}>Keşfet Sayfasına Dön</button>
-            <div className="meta">
-              <p><strong>Beğenilen:</strong> {Object.values(likedProfiles).filter(Boolean).length}</p>
-              <p><strong>Kalp:</strong> {Object.values(heartedProfiles).filter(Boolean).length}</p>
-              <p><strong>El Sallama:</strong> {Object.values(wavedProfiles).filter(Boolean).length}</p>
-            </div>
-          </aside>
           <aside className="card">
             <h3>Sohbetler</h3>
             <div className="profile-list" ref={profileListRef}>
