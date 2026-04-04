@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
 import { useAuth } from './hooks/useAuth';
+import { buildHourlyPresenceMap } from './utils/presence';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
 const ADMIN_PASSWORD2 = import.meta.env.VITE_ADMIN_PASSWORD2;
@@ -81,6 +82,7 @@ export default function App() {
   const [registeredMembers, setRegisteredMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [selectedMemberProfile, setSelectedMemberProfile] = useState(null);
+  const [presenceHourBucket, setPresenceHourBucket] = useState(new Date().toISOString().slice(0, 13));
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -104,6 +106,10 @@ export default function App() {
   const loggedIn = !!memberSession || isAdmin;
 
   const profileById = useMemo(() => Object.fromEntries(virtualProfiles.map((p) => [p.id, p])), [virtualProfiles]);
+  const displayOnlineProfiles = useMemo(
+    () => buildHourlyPresenceMap(virtualProfiles, presenceHourBucket, onlineProfiles),
+    [virtualProfiles, presenceHourBucket, onlineProfiles]
+  );
   const selectedThreadProfile = useMemo(() => (selectedThread ? profileById[selectedThread.virtual_profile_id] : null), [selectedThread, profileById]);
   const sortedIncomingThreads = useMemo(() => {
     return [...incomingThreads].sort((a, b) => {
@@ -161,10 +167,10 @@ export default function App() {
     return filtered.sort((p1, p2) => {
       if (discoverSort === 'newest') return new Date(p2.created_at || 0) - new Date(p1.created_at || 0);
       if (discoverSort === 'age_asc') return Number(p1.age || 0) - Number(p2.age || 0);
-      if (discoverSort === 'online') return Number(!!onlineProfiles[p2.id]) - Number(!!onlineProfiles[p1.id]);
+      if (discoverSort === 'online') return Number(!!displayOnlineProfiles[p2.id]) - Number(!!displayOnlineProfiles[p1.id]);
       return score(p2) - score(p1);
     });
-  }, [sortedProfiles, cityFilter, genderFilter, profileSearch, memberProfile.hobbies, discoverSort, onlineProfiles]);
+  }, [sortedProfiles, cityFilter, genderFilter, profileSearch, memberProfile.hobbies, discoverSort, displayOnlineProfiles]);
 
   function threadKey(memberId, profileId) {
     return `${memberId}::${profileId}`;
@@ -338,6 +344,13 @@ export default function App() {
     if (!memberSession || isAdmin) return;
     setUserView('discover');
   }, [memberSession, isAdmin]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPresenceHourBucket(new Date().toISOString().slice(0, 13));
+    }, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -1418,8 +1431,8 @@ export default function App() {
             {discoverProfiles.map((profile) => (
               <article key={profile.id} className="card discover-card">
                 <div className="discover-topline">
-                  <span className={`online-dot ${onlineProfiles[profile.id] ? 'on' : ''}`} />
-                  <span>{onlineProfiles[profile.id] ? 'Online' : 'Offline'}</span>
+                  <span className={`online-dot ${displayOnlineProfiles[profile.id] ? 'on' : ''}`} />
+                  <span>{displayOnlineProfiles[profile.id] ? 'Online' : 'Offline'}</span>
                   <span className="verified-pill">✔ doğrulandı</span>
                 </div>
                 {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="discover-photo" /> : <div className="discover-photo-fallback">{profile.name?.slice(0, 1)}</div>}
@@ -1450,7 +1463,7 @@ export default function App() {
                     <strong>{profile.name}</strong>
                     <small>{profile.city || 'Türkiye'}</small>
                   </span>
-                  <span className={`online-dot ${onlineProfiles[profile.id] ? 'on' : ''}`} />
+                  <span className={`online-dot ${displayOnlineProfiles[profile.id] ? 'on' : ''}`} />
                   {unreadByProfile[profile.id] > 0 && <small>Yeni ({unreadByProfile[profile.id]})</small>}
                 </button>
               ))}
