@@ -954,7 +954,8 @@ textarea {
 }
 
 .settings-page {
-  max-width: 520px;
+  display: grid;
+  gap: 12px;
 }
 
 .discover-shell {
@@ -1032,6 +1033,38 @@ textarea {
   padding: 6px 10px;
   font-weight: 700;
   color: #3730a3;
+}
+
+.left-profile-meta {
+  margin-bottom: 10px;
+}
+
+.member-list {
+  display: grid;
+  gap: 8px;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.member-row small {
+  display: block;
+  color: #64748b;
+}
+
+.danger-btn {
+  width: auto;
+  background: linear-gradient(135deg, #dc2626, #be123c);
+  padding: 8px 12px;
+  border-radius: 10px;
 }
 
 .stats-dashboard {

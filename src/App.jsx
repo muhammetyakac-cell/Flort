@@ -75,6 +75,8 @@ export default function App() {
   const [heartedProfiles, setHeartedProfiles] = useState({});
   const [wavedProfiles, setWavedProfiles] = useState({});
   const [userView, setUserView] = useState('discover');
+  const [registeredMembers, setRegisteredMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -289,6 +291,11 @@ export default function App() {
     if (!isAdmin || adminTab !== 'stats') return;
     fetchAdminStats();
   }, [isAdmin, adminTab, incomingThreads, threadMessages]);
+
+  useEffect(() => {
+    if (!isAdmin || adminTab !== 'settings') return;
+    fetchRegisteredMembers();
+  }, [isAdmin, adminTab]);
 
   useEffect(() => {
     if (!memberSession || isAdmin) return;
@@ -840,6 +847,24 @@ export default function App() {
     setStatus('Quick Facts kaydedildi.');
   }
 
+  async function fetchRegisteredMembers() {
+    setLoadingMembers(true);
+    const { data, error } = await supabase
+      .from('members')
+      .select('id, username, created_at')
+      .order('created_at', { ascending: false });
+    setLoadingMembers(false);
+    if (error) return setStatus(error.message);
+    setRegisteredMembers(data || []);
+  }
+
+  async function deleteMember(memberId) {
+    const { error } = await supabase.from('members').delete().eq('id', memberId);
+    if (error) return setStatus(error.message);
+    setRegisteredMembers((prev) => prev.filter((m) => m.id !== memberId));
+    setStatus('Kullanıcı silindi.');
+  }
+
   function openChatWithProfile(profileId) {
     setSelectedProfileId(profileId);
     setUserView('chat');
@@ -1023,6 +1048,17 @@ export default function App() {
       ) : isAdmin ? (
         <main className="admin-modern compact-shell admin-ops">
           <aside className="admin-left card">
+            {selectedThreadProfile && (
+              <div className="meta selected-profile-meta left-profile-meta">
+                <h4>Aktif Konuşulan Profil</h4>
+                {selectedThreadProfile.photo_url && <img src={selectedThreadProfile.photo_url} alt={selectedThreadProfile.name} className="profile-photo" />}
+                <p><strong>Ad:</strong> {selectedThreadProfile.name}</p>
+                <p><strong>Yaş:</strong> {selectedThreadProfile.age}</p>
+                <p><strong>Şehir:</strong> {selectedThreadProfile.city || '-'}</p>
+                <p><strong>Hobiler:</strong> {selectedThreadProfile.hobbies || '-'}</p>
+              </div>
+            )}
+
             <div className="panel-title-row panel-head">
               <h3>Mesaj Bekleyen Thread'ler</h3>
             </div>
@@ -1184,16 +1220,80 @@ export default function App() {
             )}
 
             {adminTab === 'settings' && (
-              <div className="meta settings-page">
-                <h3>Settings</h3>
-                <label className="toggle-row">
-                  <span>Bildirim sesi</span>
+              <div className="settings-page">
+                <div className="meta">
+                  <h3>Settings</h3>
+                  <label className="toggle-row">
+                    <span>Bildirim sesi</span>
+                    <input
+                      type="checkbox"
+                      checked={notificationSoundEnabled}
+                      onChange={(e) => setNotificationSoundEnabled(e.target.checked)}
+                    />
+                  </label>
+                </div>
+
+                <div className="meta">
+                  <h3>Kayıt Olan Kullanıcılar</h3>
+                  {loadingMembers ? (
+                    <p>Yükleniyor...</p>
+                  ) : (
+                    <div className="member-list">
+                      {registeredMembers.map((member) => (
+                        <div key={member.id} className="member-row">
+                          <div>
+                            <strong>{member.username}</strong>
+                            <small>{new Date(member.created_at).toLocaleString('tr-TR')}</small>
+                          </div>
+                          <button type="button" className="danger-btn" onClick={() => deleteMember(member.id)}>Sil</button>
+                        </div>
+                      ))}
+                      {!registeredMembers.length && <p>Kayıtlı kullanıcı yok.</p>}
+                    </div>
+                  )}
+                </div>
+
+                <div className="meta">
+                  <div className="panel-title-row panel-divider">
+                    <h3>Sanal Profil Oluştur</h3>
+                    <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
+                  </div>
+
+                  <label className="floating-field">
+                    <input placeholder=" " value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
+                    <span>Ad (boşsa otomatik)</span>
+                  </label>
+                  <label className="floating-field">
+                    <input placeholder=" " type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
+                    <span>Yaş (boşsa otomatik)</span>
+                  </label>
+                  <label className="floating-field">
+                    <input placeholder=" " value={profileForm.city} onChange={(e) => setProfileForm((s) => ({ ...s, city: e.target.value }))} />
+                    <span>Şehir (boşsa otomatik)</span>
+                  </label>
+                  <label className="floating-field">
+                    <input placeholder=" " value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
+                    <span>Cinsiyet</span>
+                  </label>
+                  <label className="floating-field">
+                    <textarea placeholder=" " value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
+                    <span>Hobiler</span>
+                  </label>
+
                   <input
-                    type="checkbox"
-                    checked={notificationSoundEnabled}
-                    onChange={(e) => setNotificationSoundEnabled(e.target.checked)}
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const url = await uploadImage(file, 'virtual-profiles');
+                      if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
+                    }}
                   />
-                </label>
+                  {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
+
+                  <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
+                </div>
               </div>
             )}
           </section>
@@ -1221,45 +1321,6 @@ export default function App() {
                 <button onClick={saveQuickFacts}>Quick Facts Kaydet</button>
               </div>
 
-              <div className="panel-title-row panel-divider">
-                <h3>Sanal Profil Oluştur</h3>
-                <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
-              </div>
-
-              <label className="floating-field">
-                <input placeholder=" " value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
-                <span>Ad (boşsa otomatik)</span>
-              </label>
-              <label className="floating-field">
-                <input placeholder=" " type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
-                <span>Yaş (boşsa otomatik)</span>
-              </label>
-              <label className="floating-field">
-                <input placeholder=" " value={profileForm.city} onChange={(e) => setProfileForm((s) => ({ ...s, city: e.target.value }))} />
-                <span>Şehir (boşsa otomatik)</span>
-              </label>
-              <label className="floating-field">
-                <input placeholder=" " value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
-                <span>Cinsiyet</span>
-              </label>
-              <label className="floating-field">
-                <textarea placeholder=" " value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
-                <span>Hobiler</span>
-              </label>
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const url = await uploadImage(file, 'virtual-profiles');
-                  if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
-                }}
-              />
-              {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
-
-              <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
             </aside>
           )}
         </main>
