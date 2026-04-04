@@ -921,6 +921,10 @@ textarea {
   .user-chat-layout {
     grid-template-columns: 1fr;
   }
+
+  .stats-lists {
+    grid-template-columns: 1fr;
+  }
 }
 
 .drawer-toggle,
@@ -1007,6 +1011,33 @@ textarea {
 
 .user-chat-layout {
   grid-template-columns: minmax(180px, .65fr) minmax(230px, .95fr) minmax(560px, 1.8fr) minmax(260px, 1fr);
+}
+
+.stats-dashboard {
+  display: grid;
+  gap: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.stat-card {
+  display: grid;
+  gap: 4px;
+}
+
+.stat-card strong {
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.stats-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .toggle-row {

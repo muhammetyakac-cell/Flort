@@ -57,6 +57,15 @@ export default function App() {
   const [bulkTemplate, setBulkTemplate] = useState(BULK_TEMPLATES[0]);
   const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
   const [engagementInsights, setEngagementInsights] = useState({ topHours: [], topProfiles: [] });
+  const [adminStats, setAdminStats] = useState({
+    totalMessagesToday: 0,
+    memberMessagesToday: 0,
+    adminRepliesToday: 0,
+    respondedThreadsToday: 0,
+    newMembersToday: 0,
+    activeThreadsToday: 0,
+    avgResponseMinToday: 0,
+  });
   const [adminTab, setAdminTab] = useState('chat');
   const [quickFactsText, setQuickFactsText] = useState('');
   const [cityFilter, setCityFilter] = useState('');
@@ -275,6 +284,11 @@ export default function App() {
     if (!isAdmin) return;
     fetchEngagementInsights();
   }, [isAdmin, incomingThreads, virtualProfiles]);
+
+  useEffect(() => {
+    if (!isAdmin || adminTab !== 'stats') return;
+    fetchAdminStats();
+  }, [isAdmin, adminTab, incomingThreads, threadMessages]);
 
   useEffect(() => {
     if (!memberSession || isAdmin) return;
@@ -692,6 +706,73 @@ export default function App() {
     setEngagementInsights({ topHours, topProfiles });
   }
 
+  async function fetchAdminStats() {
+    if (!isAdmin) return;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const startIso = start.toISOString();
+
+    const [{ data: todayMessages, error: msgErr }, { data: todayMembers, error: memberErr }] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('member_id, virtual_profile_id, sender_role, created_at')
+        .gte('created_at', startIso),
+      supabase
+        .from('members')
+        .select('id, created_at')
+        .gte('created_at', startIso),
+    ]);
+
+    if (msgErr || memberErr) {
+      setStatus(msgErr?.message || memberErr?.message || 'Stats alınamadı.');
+      return;
+    }
+
+    const messages = todayMessages || [];
+    const memberMessages = messages.filter((m) => m.sender_role === 'member');
+    const adminReplies = messages.filter((m) => m.sender_role === 'virtual');
+
+    const activeThreadKeys = new Set(messages.map((m) => `${m.member_id}::${m.virtual_profile_id}`));
+    const respondedThreadKeys = new Set();
+    const responseMinutes = [];
+
+    const grouped = new Map();
+    messages.forEach((m) => {
+      const key = `${m.member_id}::${m.virtual_profile_id}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(m);
+    });
+
+    grouped.forEach((rows, key) => {
+      rows.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      let lastMemberTs = null;
+      rows.forEach((row) => {
+        if (row.sender_role === 'member') {
+          lastMemberTs = row.created_at;
+        } else if (row.sender_role === 'virtual' && lastMemberTs) {
+          respondedThreadKeys.add(key);
+          const diffMin = (new Date(row.created_at).getTime() - new Date(lastMemberTs).getTime()) / 60000;
+          if (diffMin >= 0) responseMinutes.push(diffMin);
+          lastMemberTs = null;
+        }
+      });
+    });
+
+    const avgResponseMinToday = responseMinutes.length
+      ? responseMinutes.reduce((a, b) => a + b, 0) / responseMinutes.length
+      : 0;
+
+    setAdminStats({
+      totalMessagesToday: messages.length,
+      memberMessagesToday: memberMessages.length,
+      adminRepliesToday: adminReplies.length,
+      respondedThreadsToday: respondedThreadKeys.size,
+      newMembersToday: (todayMembers || []).length,
+      activeThreadsToday: activeThreadKeys.size,
+      avgResponseMinToday,
+    });
+  }
+
   async function fetchThreadMessages(memberId, profileId) {
     const { data, error } = await supabase
       .from('messages')
@@ -1040,16 +1121,32 @@ export default function App() {
             )}
 
             {adminTab === 'stats' && (
-              <div className="meta">
-                <h3>Stats Dashboard</h3>
-                <p><strong>Yoğun Saatler:</strong></p>
-                <ul className="insight-list">
-                  {engagementInsights.topHours.map((h) => <li key={h.label}>{h.label} → {h.count}</li>)}
-                </ul>
-                <p><strong>En Çok İlgi Gören Profiller:</strong></p>
-                <ul className="insight-list">
-                  {engagementInsights.topProfiles.map((p) => <li key={p.name}>{p.name} → {p.count}</li>)}
-                </ul>
+              <div className="stats-dashboard">
+                <h3>Stats Dashboard (Günlük)</h3>
+                <div className="stats-grid">
+                  <div className="meta stat-card"><small>Toplam Mesaj</small><strong>{adminStats.totalMessagesToday}</strong></div>
+                  <div className="meta stat-card"><small>Üye Mesajı</small><strong>{adminStats.memberMessagesToday}</strong></div>
+                  <div className="meta stat-card"><small>Admin Cevabı</small><strong>{adminStats.adminRepliesToday}</strong></div>
+                  <div className="meta stat-card"><small>Cevaplanan Thread</small><strong>{adminStats.respondedThreadsToday}</strong></div>
+                  <div className="meta stat-card"><small>Yeni Üye Kaydı</small><strong>{adminStats.newMembersToday}</strong></div>
+                  <div className="meta stat-card"><small>Aktif Thread</small><strong>{adminStats.activeThreadsToday}</strong></div>
+                  <div className="meta stat-card"><small>Ort. Cevap Süresi</small><strong>{adminStats.avgResponseMinToday.toFixed(1)} dk</strong></div>
+                </div>
+
+                <div className="stats-lists">
+                  <div className="meta">
+                    <p><strong>Yoğun Saatler</strong></p>
+                    <ul className="insight-list">
+                      {engagementInsights.topHours.map((h) => <li key={h.label}>{h.label} → {h.count}</li>)}
+                    </ul>
+                  </div>
+                  <div className="meta">
+                    <p><strong>En Çok İlgi Gören Profiller</strong></p>
+                    <ul className="insight-list">
+                      {engagementInsights.topProfiles.map((p) => <li key={p.name}>{p.name} → {p.count}</li>)}
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
 
