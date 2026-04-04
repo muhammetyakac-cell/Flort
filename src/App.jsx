@@ -237,6 +237,12 @@ export default function App() {
     return null;
   }
 
+  function autoResizeTextarea(el, maxHeight = 220) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+  }
+
   useEffect(() => {
     if (!loggedIn) return;
     fetchVirtualProfiles();
@@ -1211,7 +1217,16 @@ export default function App() {
                   </div>
                 )}
 
-                <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} />
+                <textarea
+                  className="grow-textarea"
+                  placeholder="Sanal profil cevabı"
+                  value={adminReply}
+                  onChange={(e) => {
+                    setAdminReply(e.target.value);
+                    autoResizeTextarea(e.target, 260);
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }}
+                />
                 <button onClick={sendAdminReply}>Yanıt Gönder</button>
               </>
             )}
@@ -1439,7 +1454,16 @@ export default function App() {
             </div>
             {typingLabel && <div className="typing-indicator">{typingLabel}</div>}
             <div className="row">
-              <input placeholder="Mesaj yaz" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }} />
+              <textarea
+                className="grow-textarea"
+                placeholder="Mesaj yaz"
+                value={newMessage}
+                onChange={(e) => {
+                  setNewMessage(e.target.value);
+                  autoResizeTextarea(e.target, 220);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              />
               <button onClick={sendMessage}>Gönder</button>
             </div>
           </section>
