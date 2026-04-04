@@ -113,15 +113,21 @@ export default function App() {
   }, [incomingThreads]);
 
   const slaStats = useMemo(() => {
-    const waiting = incomingThreads.filter((t) => t.last_sender_role === 'member');
+    const waiting = incomingThreads.filter((t) => t.last_sender_role === 'member' || (adminUnreadByThread[threadKey(t.member_id, t.virtual_profile_id)] || 0) > 0);
     const now = Date.now();
-    const avgWaitMin = waiting.length ? waiting.reduce((acc, t) => acc + (now - new Date(t.last_message_at).getTime()) / 60000, 0) / waiting.length : 0;
+    const avgWaitMin = waiting.length
+      ? waiting.reduce((acc, t) => {
+        const ts = t.last_message_at || t.created_at;
+        const diff = ts ? (now - new Date(ts).getTime()) / 60000 : 0;
+        return acc + Math.max(diff, 0);
+      }, 0) / waiting.length
+      : 0;
     return {
       waitingCount: waiting.length,
       avgWaitMin,
       lastReplyMin: selectedThread?.last_message_at ? (now - new Date(selectedThread.last_message_at).getTime()) / 60000 : 0,
     };
-  }, [incomingThreads, selectedThread]);
+  }, [incomingThreads, selectedThread, adminUnreadByThread]);
 
   const interestScore = useMemo(() => {
     if (!selectedProfile?.hobbies || !memberProfile?.hobbies) return 0;
@@ -1127,7 +1133,7 @@ export default function App() {
             <div className="meta">
               <h4>SLA Paneli</h4>
               <p><strong>Cevaplanmamış thread:</strong> {slaStats.waitingCount}</p>
-              <p><strong>Ort. bekleme süresi:</strong> {slaStats.avgWaitMin.toFixed(1)} dk</p>
+              <p><strong>Ort. bekleme süresi:</strong> {slaStats.avgWaitMin > 0 && slaStats.avgWaitMin < 1 ? '<1 dk' : `${slaStats.avgWaitMin.toFixed(1)} dk`}</p>
             </div>
 
             <div className="meta">
@@ -1259,26 +1265,6 @@ export default function App() {
                 </div>
 
                 <div className="meta">
-                  <h3>Kayıt Olan Kullanıcılar</h3>
-                  {loadingMembers ? (
-                    <p>Yükleniyor...</p>
-                  ) : (
-                    <div className="member-list">
-                      {registeredMembers.map((member) => (
-                        <div key={member.id} className="member-row">
-                          <div>
-                            <strong>{member.username}</strong>
-                            <small>{new Date(member.created_at).toLocaleString('tr-TR')}</small>
-                          </div>
-                          <button type="button" className="danger-btn" onClick={() => deleteMember(member.id)}>Sil</button>
-                        </div>
-                      ))}
-                      {!registeredMembers.length && <p>Kayıtlı kullanıcı yok.</p>}
-                    </div>
-                  )}
-                </div>
-
-                <div className="meta">
                   <div className="panel-title-row panel-divider">
                     <h3>Sanal Profil Oluştur</h3>
                     <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
@@ -1318,6 +1304,26 @@ export default function App() {
                   {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
 
                   <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
+                </div>
+
+                <div className="meta">
+                  <h3>Kayıt Olan Kullanıcılar</h3>
+                  {loadingMembers ? (
+                    <p>Yükleniyor...</p>
+                  ) : (
+                    <div className="member-list">
+                      {registeredMembers.map((member) => (
+                        <div key={member.id} className="member-row">
+                          <div>
+                            <strong>{member.username}</strong>
+                            <small>{new Date(member.created_at).toLocaleString('tr-TR')}</small>
+                          </div>
+                          <button type="button" className="danger-btn" onClick={() => deleteMember(member.id)}>Sil</button>
+                        </div>
+                      ))}
+                      {!registeredMembers.length && <p>Kayıtlı kullanıcı yok.</p>}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
