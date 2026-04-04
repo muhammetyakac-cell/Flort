@@ -42,8 +42,7 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - Supabase SQL Editor'e **git diff çıktısı** (`@@`, `+++`, `---`) yapıştırmayın.
 - Direkt olarak `supabase/schema.sql` dosyasının ham içeriğini çalıştırın.
 - Eğer `@@ ...` benzeri syntax hatası alırsanız, güvenli alternatif olarak `supabase/schema.clean.sql` dosyasını çalıştırın.
-- Sadece engagement analytics kurmak isterseniz `supabase/migrations/20260403_engagement_events.sql` dosyasını tek başına çalıştırabilirsiniz.
-- Sadece quick facts özelliğini kurmak isterseniz `supabase/migrations/20260403_thread_quick_facts.sql` dosyasını tek başına çalıştırabilirsiniz.
+- `schema.clean.sql` dosyası engagement + quick facts dahil tüm güncel şemayı tek seferde kurar.
 
 ## Önemli Not (Güvenlik)
 Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon erişim açıktır.

@@ -1078,6 +1078,24 @@ textarea {
   gap: 10px;
 }
 
+.stats-range-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.stats-range-switch button {
+  width: auto;
+  border-radius: 10px;
+  background: #e2e8f0;
+  color: #334155;
+  box-shadow: none;
+}
+
+.stats-range-switch button.active {
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: #fff;
+}
+
 .stat-card {
   display: grid;
   gap: 4px;

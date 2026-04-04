@@ -66,6 +66,7 @@ export default function App() {
     activeThreadsToday: 0,
     avgResponseMinToday: 0,
   });
+  const [statsRange, setStatsRange] = useState('daily');
   const [adminTab, setAdminTab] = useState('chat');
   const [quickFactsText, setQuickFactsText] = useState('');
   const [cityFilter, setCityFilter] = useState('');
@@ -290,7 +291,7 @@ export default function App() {
   useEffect(() => {
     if (!isAdmin || adminTab !== 'stats') return;
     fetchAdminStats();
-  }, [isAdmin, adminTab, incomingThreads, threadMessages]);
+  }, [isAdmin, adminTab, incomingThreads, threadMessages, statsRange]);
 
   useEffect(() => {
     if (!isAdmin || adminTab !== 'settings') return;
@@ -739,7 +740,13 @@ export default function App() {
   async function fetchAdminStats() {
     if (!isAdmin) return;
     const start = new Date();
-    start.setHours(0, 0, 0, 0);
+    if (statsRange === 'daily') {
+      start.setHours(0, 0, 0, 0);
+    } else if (statsRange === 'weekly') {
+      start.setDate(start.getDate() - 7);
+    } else {
+      start.setMonth(start.getMonth() - 1);
+    }
     const startIso = start.toISOString();
 
     const [{ data: todayMessages, error: msgErr }, { data: todayMembers, error: memberErr }] = await Promise.all([
@@ -1191,7 +1198,12 @@ export default function App() {
 
             {adminTab === 'stats' && (
               <div className="stats-dashboard">
-                <h3>Stats Dashboard (Günlük)</h3>
+                <h3>Stats Dashboard ({statsRange === 'daily' ? 'Günlük' : statsRange === 'weekly' ? 'Haftalık' : 'Aylık'})</h3>
+                <div className="stats-range-switch">
+                  <button type="button" className={statsRange === 'daily' ? 'active' : ''} onClick={() => setStatsRange('daily')}>Günlük</button>
+                  <button type="button" className={statsRange === 'weekly' ? 'active' : ''} onClick={() => setStatsRange('weekly')}>Haftalık</button>
+                  <button type="button" className={statsRange === 'monthly' ? 'active' : ''} onClick={() => setStatsRange('monthly')}>Aylık</button>
+                </div>
                 <div className="stats-grid">
                   <div className="meta stat-card"><small>Toplam Mesaj</small><strong>{adminStats.totalMessagesToday}</strong></div>
                   <div className="meta stat-card"><small>Üye Mesajı</small><strong>{adminStats.memberMessagesToday}</strong></div>
