@@ -22,6 +22,7 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `VITE_ADMIN_PASSWORD`
+   - `VITE_ADMIN_PASSWORD2` (opsiyonel, ikinci admin girişi için)
    - `VITE_OPENAI_API_KEY` (opsiyonel, AI önerileri için)
 2. `supabase/schema.sql` dosyasını SQL Editor'de çalıştır. (Eski şemalardan migration + storage bucket/policy kurulumu yapar, tekrar çalıştırılabilir)
 3. Uygulamayı başlat:
@@ -35,6 +36,14 @@ Bu sürümde admin ve üyeler profil fotoğrafı yükleyebilir.
 - `virtual_profiles.photo_url` + `virtual_profiles.city` kolonları
 - `member_profiles.status_emoji` kolonu
 - `profile-images` storage bucket + policy'ler
+- `engagement_events` tablosu (admin analytics için)
+- `thread_quick_facts` tablosu (thread bazlı hızlı not defteri)
+
+## SQL Çalıştırma Notu (Önemli)
+- Supabase SQL Editor'e **git diff çıktısı** (`@@`, `+++`, `---`) yapıştırmayın.
+- Direkt olarak `supabase/schema.sql` dosyasının ham içeriğini çalıştırın.
+- Eğer `@@ ...` benzeri syntax hatası alırsanız, güvenli alternatif olarak `supabase/schema.clean.sql` dosyasını çalıştırın.
+- `schema.clean.sql` dosyası engagement + quick facts dahil tüm güncel şemayı tek seferde kurar.
 
 ## Önemli Not (Güvenlik)
 Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon erişim açıktır.
@@ -47,6 +56,7 @@ Bu yapı demo/prototip içindir. `members.password` düz metin tutulur ve anon e
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`
   - `VITE_ADMIN_PASSWORD`
+  - `VITE_ADMIN_PASSWORD2` (opsiyonel)
    - `VITE_OPENAI_API_KEY` (opsiyonel, AI önerileri için)
 
 
