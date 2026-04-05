@@ -55,6 +55,18 @@ export default function App() {
     fetchMessages(selectedProfileId);
   }, [selectedProfileId, session, mode]);
 
+  // Keyboard shortcut for sending messages (Ctrl+Enter)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && newMessage.trim() && selectedProfileId && mode === 'user') {
+        sendMessage();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [newMessage, selectedProfileId, mode]);
+
   async function signUp() {
     setLoading(true);
     setStatus('');
@@ -169,7 +181,7 @@ export default function App() {
     const { data, error } = await supabase
       .from('admin_threads')
       .select('*')
-      .order('last_message_at', { ascending: true });
+      .order('last_message_at', { ascending: false });
 
     if (error) return setStatus(error.message);
     setIncomingThreads(data || []);
@@ -194,72 +206,73 @@ export default function App() {
 
   const isAdmin = session?.user?.user_metadata?.role === 'admin';
 
-  return (
-    <div className="layout">
-      <header>
-        <h1>Flort Chat</h1>
-        {!session && (
-          <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
-            {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
-          </button>
-        )}
-        {session && <button onClick={signOut}>Çıkış</button>}
-      </header>
+  // ===== Render Functions for Better Organization =====
+  const renderAuthForm = () => (
+    <main style={{ maxWidth: '500px', margin: '2rem auto', width: '100%' }}>
+      <section className="card">
+        <h2>{mode === 'admin' ? '🔐 Admin giriş/kayıt' : '👤 Kullanıcı giriş/kayıt'}</h2>
+        <input
+          placeholder="Kullanıcı adı"
+          value={authForm.username}
+          onChange={(e) => setAuthForm((s) => ({ ...s, username: e.target.value }))}
+        />
+        <input
+          placeholder="E-posta"
+          value={authForm.email}
+          onChange={(e) => setAuthForm((s) => ({ ...s, email: e.target.value }))}
+        />
+        <input
+          placeholder="Şifre"
+          type="password"
+          value={authForm.password}
+          onChange={(e) => setAuthForm((s) => ({ ...s, password: e.target.value }))}
+        />
+        <div className="row">
+          <button disabled={loading} onClick={signIn}>Giriş yap</button>
+          <button disabled={loading} onClick={signUp}>Kayıt ol</button>
+        </div>
+        {status && <p className="status">{status}</p>}
+      </section>
+    </main>
+  );
 
-      {!session ? (
-        <section className="card">
-          <h2>{mode === 'admin' ? 'Admin giriş/kayıt' : 'Kullanıcı giriş/kayıt'}</h2>
-          <input
-            placeholder="Kullanıcı adı"
-            value={authForm.username}
-            onChange={(e) => setAuthForm((s) => ({ ...s, username: e.target.value }))}
-          />
-          <input
-            placeholder="E-posta"
-            value={authForm.email}
-            onChange={(e) => setAuthForm((s) => ({ ...s, email: e.target.value }))}
-          />
-          <input
-            placeholder="Şifre"
-            type="password"
-            value={authForm.password}
-            onChange={(e) => setAuthForm((s) => ({ ...s, password: e.target.value }))}
-          />
-          <div className="row">
-            <button disabled={loading} onClick={signIn}>Giriş yap</button>
-            <button disabled={loading} onClick={signUp}>Kayıt ol</button>
-          </div>
-        </section>
-      ) : isAdmin ? (
-        <main className="admin-grid">
-          <section className="card">
-            <h3>Sanal Profil Oluştur</h3>
-            <input
-              placeholder="Ad"
-              value={profileForm.name}
-              onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))}
-            />
-            <input
-              placeholder="Yaş"
-              type="number"
-              value={profileForm.age}
-              onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))}
-            />
-            <input
-              placeholder="Cinsiyet"
-              value={profileForm.gender}
-              onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))}
-            />
-            <textarea
-              placeholder="Hobiler"
-              value={profileForm.hobbies}
-              onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))}
-            />
-            <button onClick={createVirtualProfile}>Kaydet</button>
-          </section>
+  const renderAdminPanel = () => (
+    <main className="admin-grid">
+      <section className="card">
+        <h3>➕ Sanal Profil Oluştur</h3>
+        <input
+          placeholder="Ad"
+          value={profileForm.name}
+          onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))}
+        />
+        <input
+          placeholder="Yaş"
+          type="number"
+          value={profileForm.age}
+          onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))}
+        />
+        <input
+          placeholder="Cinsiyet"
+          value={profileForm.gender}
+          onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))}
+        />
+        <textarea
+          placeholder="Hobiler (virgülle ayrılmış)"
+          value={profileForm.hobbies}
+          onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))}
+        />
+        <button onClick={createVirtualProfile}>✅ Kaydet</button>
+        {status && status.includes('Sanal profil') && <p className="status">{status}</p>}
+      </section>
 
-          <section className="card">
-            <h3>Mesajlara Cevap Penceresi</h3>
+      <section className="card">
+        <h3>💬 Gelen Sohbetler</h3>
+        {incomingThreads.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>
+            Henüz sohbet yok
+          </p>
+        ) : (
+          <>
             <div className="thread-list">
               {incomingThreads.map((thread) => (
                 <button
@@ -272,62 +285,122 @@ export default function App() {
                       : ''
                   }
                 >
-                  {thread.member_username} → {thread.virtual_name}
+                  <strong>{thread.member_username}</strong> → {thread.virtual_name}
                 </button>
               ))}
             </div>
-            <textarea
-              placeholder="Sanal profil cevabı"
-              value={adminReply}
-              onChange={(e) => setAdminReply(e.target.value)}
-            />
-            <button onClick={sendAdminReply}>Yanıt Gönder</button>
-          </section>
-        </main>
-      ) : (
-        <main className="user-grid">
-          <aside className="card">
-            <h3>Sanal Profiller</h3>
+            {selectedThread && (
+              <>
+                <div className="chat-box">
+                  {messages.filter(msg => 
+                    msg.virtual_profile_id === selectedThread.virtual_profile_id &&
+                    msg.member_id === selectedThread.member_id
+                  ).map((msg) => (
+                    <div key={msg.id} className={`msg ${msg.sender_role}`}>
+                      <span>{msg.sender_role === 'member' ? selectedThread.member_username : selectedThread.virtual_name}</span>
+                      <p>{msg.content}</p>
+                    </div>
+                  ))}
+                </div>
+                <textarea
+                  placeholder="Cevap yaz..."
+                  value={adminReply}
+                  onChange={(e) => setAdminReply(e.target.value)}
+                />
+                <button onClick={sendAdminReply}>📤 Cevap Gönder</button>
+              </>
+            )}
+          </>
+        )}
+        {status && status.includes('Yanıt') && <p className="status">{status}</p>}
+      </section>
+    </main>
+  );
+
+  const renderUserPanel = () => (
+    <main className="user-grid">
+      <aside className="card">
+        <h3>👥 Sanal Profiller</h3>
+        {virtualProfiles.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem 0' }}>
+            Profil yok
+          </p>
+        ) : (
+          <>
             {virtualProfiles.map((profile) => (
               <button
                 key={profile.id}
                 onClick={() => setSelectedProfileId(profile.id)}
                 className={selectedProfileId === profile.id ? 'active' : ''}
+                style={{ justifyContent: 'flex-start' }}
               >
                 {profile.name}
               </button>
             ))}
             {selectedProfile && (
               <div className="meta">
-                <p><strong>Yaş:</strong> {selectedProfile.age}</p>
-                <p><strong>Cinsiyet:</strong> {selectedProfile.gender}</p>
-                <p><strong>Hobiler:</strong> {selectedProfile.hobbies || '-'}</p>
+                <p><strong>📅 Yaş:</strong> {selectedProfile.age}</p>
+                <p><strong>⚧️ Cinsiyet:</strong> {selectedProfile.gender}</p>
+                <p><strong>🎨 Hobiler:</strong> {selectedProfile.hobbies || '-'}</p>
               </div>
             )}
-          </aside>
-          <section className="card">
-            <h3>Sohbet</h3>
+          </>
+        )}
+      </aside>
+
+      <section className="card">
+        <h3>💬 {selectedProfile?.name ? `Sohbet: ${selectedProfile.name}` : 'Profil seç'}</h3>
+        {selectedProfile ? (
+          <>
             <div className="chat-box">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`msg ${msg.sender_role}`}>
-                  <span>{msg.sender_role === 'member' ? 'Sen' : selectedProfile?.name}</span>
-                  <p>{msg.content}</p>
-                </div>
-              ))}
+              {messages.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: 'auto', marginBottom: 'auto' }}>
+                  Sohbet henüz başlamadı
+                </p>
+              ) : (
+                messages.map((msg) => (
+                  <div key={msg.id} className={`msg ${msg.sender_role}`}>
+                    <span>{msg.sender_role === 'member' ? 'Sen' : selectedProfile.name}</span>
+                    <p>{msg.content}</p>
+                  </div>
+                ))
+              )}
             </div>
             <div className="row">
               <input
-                placeholder="Mesaj yaz"
+                placeholder="Mesaj yaz..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
               />
-              <button onClick={sendMessage}>Gönder</button>
+              <button onClick={sendMessage}>📤 Gönder</button>
             </div>
-          </section>
-        </main>
-      )}
+          </>
+        ) : (
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem 0' }}>
+            Sohbet başlatmak için sol taraftan bir profil seç
+          </p>
+        )}
+        {status && <p className="status">{status}</p>}
+      </section>
+    </main>
+  );
 
-      {status && <p className="status">{status}</p>}
+  return (
+    <div className="layout">
+      <header>
+        <h1>💬 Flort Chat</h1>
+        <div>
+          {!session && (
+            <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
+              {mode === 'user' ? '🔐 Admin girişi' : '👤 Kullanıcı girişi'}
+            </button>
+          )}
+          {session && <button onClick={signOut}>Çıkış</button>}
+        </div>
+      </header>
+
+      {!session ? renderAuthForm() : isAdmin ? renderAdminPanel() : renderUserPanel()}
     </div>
   );
 }

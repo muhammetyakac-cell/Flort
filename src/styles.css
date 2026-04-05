@@ -1,19 +1,433 @@
-:root { font-family: Inter, system-ui, sans-serif; color: #111; }
-body { margin: 0; background: #f4f4f6; }
-.layout { max-width: 1080px; margin: 0 auto; padding: 24px; }
-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-.user-grid, .admin-grid { display: grid; gap: 16px; grid-template-columns: 1fr 2fr; }
-.row { display: flex; gap: 8px; }
-input, textarea, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d4d4d8; font: inherit; }
-button { cursor: pointer; background: #18181b; color: #fff; }
-button.active { background: #0e7490; }
-.linkish { width: auto; font-size: .85rem; padding: 6px 10px; background: transparent; color: #0f766e; border: none; text-decoration: underline; }
-.chat-box { height: 360px; overflow: auto; background: #fafafa; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
-.msg { max-width: 70%; margin: 8px 0; padding: 8px 10px; border-radius: 10px; }
-.msg.member { background: #e0f2fe; margin-left: auto; }
-.msg.virtual { background: #dcfce7; }
-.thread-list { display: grid; gap: 6px; margin-bottom: 10px; }
-.status { margin-top: 12px; color: #0f766e; }
-.meta { margin-top: 8px; font-size: .92rem; }
-@media (max-width: 768px) { .user-grid, .admin-grid { grid-template-columns: 1fr; } }
+/* ===== Color System ===== */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-color: #e5e7eb;
+  --accent: #3b82f6;
+  --accent-dark: #2563eb;
+  --accent-light: #dbeafe;
+  --success: #10b981;
+  --success-light: #d1fae5;
+  --member-msg: #dbeafe;
+  --virtual-msg: #dcfce7;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+}
+
+/* ===== Base Typography & Layout ===== */
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-secondary);
+  transition: background-color 0.2s ease;
+}
+
+h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; }
+h1 { font-size: 1.875rem; line-height: 2.25rem; }
+h2 { font-size: 1.5rem; line-height: 2rem; }
+h3 { font-size: 1.25rem; line-height: 1.75rem; }
+p { margin: 0.5rem 0; }
+
+/* ===== Main Layout Container ===== */
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-secondary);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+header h1 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+/* ===== Content Area ===== */
+main {
+  flex: 1;
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  max-width: 1920px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* 3-Column Layout (Desktop): Profiles | Chat | Admin */
+.user-grid {
+  grid-template-columns: 280px 1fr;
+  grid-template-areas: "profiles chat";
+}
+
+.admin-grid {
+  grid-template-columns: 1fr 1.5fr;
+  grid-template-areas: "create respond";
+}
+
+/* 3-Column Enhanced Admin Layout (if sidebar exists) */
+.admin-grid-3col {
+  grid-template-columns: 250px 1fr 350px;
+  grid-template-areas: "profiles chat admin";
+}
+
+/* Assign areas to sections */
+main > aside:first-child { grid-area: profiles; }
+main > section:nth-of-type(1) { grid-area: chat; }
+main > section:nth-of-type(2) { 
+  grid-area: respond;
+  grid-column: 1 / -1;
+}
+
+/* ===== Cards & Containers ===== */
+.card {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+aside.card {
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  position: sticky;
+  top: 80px;
+}
+
+section.card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Form Elements ===== */
+input, textarea, button {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  font: inherit;
+  transition: all 0.2s ease;
+  padding: 0.75rem 1rem;
+  min-height: 40px;
+}
+
+input, textarea {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.75rem;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+  background: var(--bg-primary);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+/* ===== Buttons ===== */
+button {
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font-weight: 500;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-dark);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.active {
+  background: var(--success);
+  color: white;
+}
+
+button.active:hover:not(:disabled) {
+  background: #059669;
+}
+
+.linkish {
+  width: auto;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  color: var(--accent);
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: auto;
+}
+
+.linkish:hover {
+  color: var(--accent-dark);
+  text-decoration-color: var(--accent-dark);
+}
+
+/* ===== Utility Classes ===== */
+.row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.row > * {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* ===== Chat Section ===== */
+.chat-box {
+  flex: 1;
+  min-height: 400px;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.msg {
+  max-width: 75%;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  word-wrap: break-word;
+}
+
+.msg span {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+  opacity: 0.8;
+}
+
+.msg p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.msg.member {
+  background: var(--member-msg);
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+  color: #0369a1;
+}
+
+.msg.virtual {
+  background: var(--virtual-msg);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+  color: #065f46;
+}
+
+/* ===== Thread List ===== */
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.thread-list button {
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.thread-list button:hover {
+  background: var(--bg-tertiary);
+}
+
+.thread-list button.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+/* ===== Status Messages ===== */
+.status {
+  padding: 1rem;
+  margin-top: 1rem;
+  border-radius: 8px;
+  background: var(--success-light);
+  color: #065f46;
+  border: 1px solid var(--success);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Metadata ===== */
+.meta {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.meta p {
+  margin: 0.5rem 0;
+}
+
+.meta strong {
+  color: var(--text-primary);
+}
+
+/* ===== Scrollbar Styling ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ===== Responsive Design ===== */
+@media (max-width: 1200px) {
+  main {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .user-grid, .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  aside.card {
+    position: static;
+    max-height: none;
+    margin-bottom: 1rem;
+  }
+
+  .chat-box {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  header {
+    padding: 1rem;
+  }
+
+  header h1 {
+    font-size: 1.25rem;
+  }
+
+  main {
+    padding: 0.75rem;
+    gap: 1rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .user-grid, .admin-grid, .admin-grid-3col {
+    grid-template-columns: 1fr;
+  }
+
+  .thread-list {
+    max-height: 150px;
+  }
+
+  .msg {
+    max-width: 85%;
+  }
+
+  input, textarea, button {
+    padding: 0.625rem 0.75rem;
+    font-size: 16px;
+  }
+
+  .row {
+    gap: 0.5rem;
+  }
+}

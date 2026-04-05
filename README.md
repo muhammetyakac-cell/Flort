@@ -10,6 +10,12 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
 - Admin panelinde:
   - Sanal profil oluşturma (ad, yaş, cinsiyet, hobiler)
   - Mesajlara tek pencereden sırayla cevap verme
+- **✨ Modernleştirilmiş UI** (v0.1.0):
+  - Modern renk sistemi ve tasarım
+  - Desktop-optimized responsive layout
+  - Keyboard shortcuts (Enter için mesaj, Shift+Enter için yeni satır)
+  - Geliştirilmiş empty states ve error handling
+  - Professional emoji iconları
 
 ## Kurulum
 1. `.env.example` dosyasını `.env` olarak kopyalayın.
@@ -29,3 +35,13 @@ Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle**
 
 ## Not
 Admin hesabı açarken giriş ekranını **Admin girişi** moduna alıp kayıt olun. Bu role, Supabase auth metadata içinde `role: admin` olarak yazılır.
+
+## v0.1.0 - UI Modernizasyonu (2026-04-05)
+- Kapsamlı CSS modernizasyonu (397 satır organized CSS)
+- React render functions reorganized (renderAuthForm, renderAdminPanel, renderUserPanel)
+- Renk sistemi eklendi (12+ CSS variables)
+- Responsive breakpoints (desktop-optimized)
+- Keyboard shortcuts desteği
+- Better empty states
+- Emoji icons
+- Professional styling
