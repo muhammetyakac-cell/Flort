@@ -1438,7 +1438,7 @@ export default function App() {
                 {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="discover-photo" /> : <div className="discover-photo-fallback">{profile.name?.slice(0, 1)}</div>}
                 <h3>{profile.name}, {profile.age}</h3>
                 <p>{profile.city || 'Türkiye'} • {profile.gender || '-'}</p>
-                <small>{profile.hobbies || 'Hobi bilgisi yok.'}</small>
+                <small className="discover-hobbies">{profile.hobbies || 'Hobi bilgisi yok.'}</small>
                 <div className="discover-actions">
                   <button type="button" onClick={() => { setHeartedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'heart'); }}>{heartedProfiles[profile.id] ? '💘 Kalp Atıldı' : '💘 Kalp At'}</button>
                   <button type="button" onClick={() => { setWavedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'wave'); }}>{wavedProfiles[profile.id] ? '👋 El Sallandı' : '👋 El Salla'}</button>

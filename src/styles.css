@@ -1006,6 +1006,14 @@ textarea {
   overflow: hidden;
 }
 
+.discover-hobbies {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.8em;
+}
+
 .discover-topline {
   display: flex;
   align-items: center;
@@ -1163,6 +1171,54 @@ textarea {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    padding: 16px 10px;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .admin-nav-pills {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .discover-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .discover-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .discover-actions .cta-message {
+    grid-column: 1 / -1;
+  }
+
+  .user-nav-strip {
+    flex-wrap: wrap;
+  }
+
+  .row {
+    flex-direction: column;
+  }
+
+  .chat-box {
+    height: 56vh;
+  }
 }
 
 .toggle-row {
