@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
+import { useAuth } from './hooks/useAuth';
+import { buildHourlyPresenceMap } from './utils/presence';
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+const ADMIN_PASSWORD2 = import.meta.env.VITE_ADMIN_PASSWORD2;
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
-const initialAuth = { username: '', password: '' };
 const initialProfile = { name: '', age: '', city: '', gender: '', hobbies: '', photo_url: '' };
 const initialMemberProfile = { age: '', hobbies: '', city: '', photo_url: '', status_emoji: '🙂' };
 
@@ -19,13 +21,20 @@ const THREAD_TAGS = ['sicak_lead', 'soguk', 'takip_edilecek'];
 const BULK_TEMPLATES = ['Merhaba! 👋', 'Naber, günün nasıl?', 'Müsaitsen yaz ✨'];
 
 export default function App() {
-  const [mode, setMode] = useState('user');
-  const [authForm, setAuthForm] = useState(initialAuth);
   const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const [memberSession, setMemberSession] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const {
+    mode,
+    setMode,
+    authForm,
+    setAuthForm,
+    loading,
+    memberSession,
+    isAdmin,
+    signIn,
+    signUp,
+    signOut,
+  } = useAuth({ adminPasswords: [ADMIN_PASSWORD, ADMIN_PASSWORD2], setStatus });
 
   const [virtualProfiles, setVirtualProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
@@ -48,6 +57,32 @@ export default function App() {
   const [adminDrawerOpen, setAdminDrawerOpen] = useState(true);
   const [selectedThreadKeys, setSelectedThreadKeys] = useState({});
   const [bulkTemplate, setBulkTemplate] = useState(BULK_TEMPLATES[0]);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
+  const [engagementInsights, setEngagementInsights] = useState({ topHours: [], topProfiles: [] });
+  const [adminStats, setAdminStats] = useState({
+    totalMessagesToday: 0,
+    memberMessagesToday: 0,
+    adminRepliesToday: 0,
+    respondedThreadsToday: 0,
+    newMembersToday: 0,
+    activeThreadsToday: 0,
+    avgResponseMinToday: 0,
+  });
+  const [statsRange, setStatsRange] = useState('daily');
+  const [adminTab, setAdminTab] = useState('chat');
+  const [quickFactsText, setQuickFactsText] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [profileSearch, setProfileSearch] = useState('');
+  const [discoverSort, setDiscoverSort] = useState('match');
+  const [likedProfiles, setLikedProfiles] = useState({});
+  const [heartedProfiles, setHeartedProfiles] = useState({});
+  const [wavedProfiles, setWavedProfiles] = useState({});
+  const [userView, setUserView] = useState('discover');
+  const [registeredMembers, setRegisteredMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [selectedMemberProfile, setSelectedMemberProfile] = useState(null);
+  const [presenceHourBucket, setPresenceHourBucket] = useState(new Date().toISOString().slice(0, 13));
   const chatBoxRef = useRef(null);
   const adminChatBoxRef = useRef(null);
   const profileListRef = useRef(null);
@@ -71,18 +106,36 @@ export default function App() {
   const loggedIn = !!memberSession || isAdmin;
 
   const profileById = useMemo(() => Object.fromEntries(virtualProfiles.map((p) => [p.id, p])), [virtualProfiles]);
+  const displayOnlineProfiles = useMemo(
+    () => buildHourlyPresenceMap(virtualProfiles, presenceHourBucket, onlineProfiles),
+    [virtualProfiles, presenceHourBucket, onlineProfiles]
+  );
   const selectedThreadProfile = useMemo(() => (selectedThread ? profileById[selectedThread.virtual_profile_id] : null), [selectedThread, profileById]);
+  const sortedIncomingThreads = useMemo(() => {
+    return [...incomingThreads].sort((a, b) => {
+      const waitA = a.last_sender_role === 'member' ? 1 : 0;
+      const waitB = b.last_sender_role === 'member' ? 1 : 0;
+      if (waitA !== waitB) return waitB - waitA;
+      return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
+    });
+  }, [incomingThreads]);
 
   const slaStats = useMemo(() => {
-    const waiting = incomingThreads.filter((t) => t.last_sender_role === 'member');
+    const waiting = incomingThreads.filter((t) => t.last_sender_role === 'member' || (adminUnreadByThread[threadKey(t.member_id, t.virtual_profile_id)] || 0) > 0);
     const now = Date.now();
-    const avgWaitMin = waiting.length ? waiting.reduce((acc, t) => acc + (now - new Date(t.last_message_at).getTime()) / 60000, 0) / waiting.length : 0;
+    const avgWaitMin = waiting.length
+      ? waiting.reduce((acc, t) => {
+        const ts = t.last_message_at || t.created_at;
+        const diff = ts ? (now - new Date(ts).getTime()) / 60000 : 0;
+        return acc + Math.max(diff, 0);
+      }, 0) / waiting.length
+      : 0;
     return {
       waitingCount: waiting.length,
       avgWaitMin,
       lastReplyMin: selectedThread?.last_message_at ? (now - new Date(selectedThread.last_message_at).getTime()) / 60000 : 0,
     };
-  }, [incomingThreads, selectedThread]);
+  }, [incomingThreads, selectedThread, adminUnreadByThread]);
 
   const interestScore = useMemo(() => {
     if (!selectedProfile?.hobbies || !memberProfile?.hobbies) return 0;
@@ -93,6 +146,31 @@ export default function App() {
     a.forEach((item) => { if (b.has(item)) common += 1; });
     return Math.round((common / Math.max(a.size, b.size)) * 100);
   }, [selectedProfile, memberProfile]);
+
+  const discoverProfiles = useMemo(() => {
+    const filtered = sortedProfiles.filter((profile) => {
+      const cityOk = cityFilter ? (profile.city || '').toLowerCase().includes(cityFilter.toLowerCase()) : true;
+      const genderOk = genderFilter === 'all' ? true : (profile.gender || '').toLowerCase() === genderFilter.toLowerCase();
+      const text = `${profile.name || ''} ${profile.city || ''} ${profile.hobbies || ''}`.toLowerCase();
+      const searchOk = profileSearch ? text.includes(profileSearch.toLowerCase()) : true;
+      return cityOk && genderOk && searchOk;
+    });
+    const score = (profile) => {
+      const a = new Set((profile.hobbies || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean));
+      const b = new Set((memberProfile.hobbies || '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean));
+      if (!a.size || !b.size) return 0;
+      let common = 0;
+      a.forEach((item) => { if (b.has(item)) common += 1; });
+      return Math.round((common / Math.max(a.size, b.size)) * 100);
+    };
+
+    return filtered.sort((p1, p2) => {
+      if (discoverSort === 'newest') return new Date(p2.created_at || 0) - new Date(p1.created_at || 0);
+      if (discoverSort === 'age_asc') return Number(p1.age || 0) - Number(p2.age || 0);
+      if (discoverSort === 'online') return Number(!!displayOnlineProfiles[p2.id]) - Number(!!displayOnlineProfiles[p1.id]);
+      return score(p2) - score(p1);
+    });
+  }, [sortedProfiles, cityFilter, genderFilter, profileSearch, memberProfile.hobbies, discoverSort, displayOnlineProfiles]);
 
   function threadKey(memberId, profileId) {
     return `${memberId}::${profileId}`;
@@ -142,6 +220,7 @@ export default function App() {
   }
 
   function playNotificationSound() {
+    if (!notificationSoundEnabled) return;
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = ctx.createOscillator();
@@ -162,12 +241,28 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem('admin_notification_sound_enabled');
+    if (saved === null) return;
+    setNotificationSoundEnabled(saved === 'true');
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('admin_notification_sound_enabled', String(notificationSoundEnabled));
+  }, [notificationSoundEnabled]);
+
   function getAudioUrl(content) {
     const clean = (content || '').trim();
     if (!clean) return null;
     if (clean.startsWith('audio:')) return clean.replace('audio:', '').trim();
     if (/^https?:\/\/.+\.(mp3|wav|m4a|ogg)(\?.*)?$/i.test(clean)) return clean;
     return null;
+  }
+
+  function autoResizeTextarea(el, maxHeight = 220) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
   }
 
   useEffect(() => {
@@ -177,9 +272,9 @@ export default function App() {
   }, [loggedIn, isAdmin]);
 
   useEffect(() => {
-    if (!memberSession || !selectedProfileId || isAdmin) return;
+    if (!memberSession || !selectedProfileId || isAdmin || userView !== 'chat') return;
     fetchMessages(selectedProfileId);
-  }, [memberSession, selectedProfileId, isAdmin]);
+  }, [memberSession, selectedProfileId, isAdmin, userView]);
 
   useEffect(() => {
     if (!selectedProfileId || isAdmin) return;
@@ -214,14 +309,48 @@ export default function App() {
   }, [incomingThreads, isAdmin]);
 
   useEffect(() => {
+    if (!isAdmin || selectedThread || !sortedIncomingThreads.length) return;
+    setSelectedThread(sortedIncomingThreads[0]);
+  }, [isAdmin, selectedThread, sortedIncomingThreads]);
+
+  useEffect(() => {
     if (!isAdmin || !selectedThread) return;
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+    fetchQuickFacts(selectedThread.member_id, selectedThread.virtual_profile_id);
+    fetchMemberProfile(selectedThread.member_id);
   }, [isAdmin, selectedThread]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchEngagementInsights();
+  }, [isAdmin, incomingThreads, virtualProfiles]);
+
+  useEffect(() => {
+    if (!isAdmin || adminTab !== 'stats') return;
+    fetchAdminStats();
+  }, [isAdmin, adminTab, incomingThreads, threadMessages, statsRange]);
+
+  useEffect(() => {
+    if (!isAdmin || adminTab !== 'settings') return;
+    fetchRegisteredMembers();
+  }, [isAdmin, adminTab]);
 
   useEffect(() => {
     if (!memberSession || isAdmin) return;
     fetchOwnProfile();
   }, [memberSession, isAdmin]);
+
+  useEffect(() => {
+    if (!memberSession || isAdmin) return;
+    setUserView('discover');
+  }, [memberSession, isAdmin]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPresenceHourBucket(new Date().toISOString().slice(0, 13));
+    }, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -448,73 +577,17 @@ export default function App() {
     setStatus('Profil bilgilerin kaydedildi.');
   }
 
-  async function signUp() {
-    if (mode === 'admin') return setStatus('Admin kayıt olamaz.');
-    if (!authForm.username || !authForm.password) return setStatus('Kullanıcı adı ve şifre zorunlu.');
-
-    setLoading(true);
-    setStatus('');
-
-    const { error } = await supabase.from('members').insert({
-      username: authForm.username.trim(),
-      password: authForm.password,
+  function handleSignOut() {
+    signOut(() => {
+      setSelectedProfileId(null);
+      setMessages([]);
+      setIncomingThreads([]);
+      setSelectedThread(null);
+      setUnreadByProfile({});
+      setAdminUnreadByThread({});
+      setTypingLabel('');
+      setUserView('discover');
     });
-
-    setLoading(false);
-    if (error) return setStatus(`Kayıt başarısız: ${error.message}`);
-    setStatus('Kayıt başarılı. Giriş yapabilirsin.');
-  }
-
-  async function signIn() {
-    setLoading(true);
-    setStatus('');
-
-    if (mode === 'admin') {
-      if (!ADMIN_PASSWORD) {
-        setLoading(false);
-        return setStatus('VITE_ADMIN_PASSWORD eksik.');
-      }
-      if (authForm.password !== ADMIN_PASSWORD) {
-        setLoading(false);
-        return setStatus('Admin şifresi hatalı.');
-      }
-      setIsAdmin(true);
-      setMemberSession(null);
-      setLoading(false);
-      return setStatus('Admin girişi başarılı.');
-    }
-
-    if (!authForm.username || !authForm.password) {
-      setLoading(false);
-      return setStatus('Kullanıcı adı ve şifre girmen gerekiyor.');
-    }
-
-    const { data, error } = await supabase
-      .from('members')
-      .select('id, username')
-      .eq('username', authForm.username.trim())
-      .eq('password', authForm.password)
-      .single();
-
-    setLoading(false);
-    if (error || !data) return setStatus('Kullanıcı adı veya şifre hatalı.');
-
-    setMemberSession(data);
-    setIsAdmin(false);
-    setStatus('Giriş başarılı.');
-  }
-
-  function signOut() {
-    setMemberSession(null);
-    setIsAdmin(false);
-    setSelectedProfileId(null);
-    setMessages([]);
-    setIncomingThreads([]);
-    setSelectedThread(null);
-    setUnreadByProfile({});
-    setAdminUnreadByThread({});
-    setTypingLabel('');
-    setStatus('Çıkış yapıldı.');
   }
 
   async function fetchVirtualProfiles() {
@@ -575,8 +648,32 @@ export default function App() {
       seen_by_admin: false,
     });
     if (error) return setStatus(error.message);
+    recordEngagement('member_message', memberSession.id, selectedProfileId, { source: 'chat_input' });
     setNewMessage('');
     fetchMessages(selectedProfileId);
+  }
+
+  async function sendReaction(profileId, reactionType) {
+    if (!memberSession || !profileId) return;
+    const templates = {
+      heart: '💘 Kalp gönderdim.',
+      wave: '👋 Selam, sana el salladım.',
+      like: '👍 Profilini beğendim.',
+    };
+    const content = templates[reactionType];
+    if (!content) return;
+
+    const { error } = await supabase.from('messages').insert({
+      member_id: memberSession.id,
+      virtual_profile_id: profileId,
+      sender_role: 'member',
+      content,
+      seen_by_member: true,
+      seen_by_admin: false,
+    });
+    if (error) return setStatus(error.message);
+    recordEngagement('member_message', memberSession.id, profileId, { source: `reaction_${reactionType}` });
+    setStatus('Etkileşim mesajı gönderildi.');
   }
 
   async function createVirtualProfile() {
@@ -619,10 +716,142 @@ export default function App() {
     try {
       const data = await selectRows('admin_threads', (q) => q.order('last_message_at', { ascending: false }));
       setIncomingThreads(data || []);
-      if (!selectedThread && data?.length) setSelectedThread(data[0]);
     } catch (error) {
       setStatus(error.message);
     }
+  }
+
+  async function recordEngagement(eventType, memberId, virtualProfileId, meta = {}) {
+    try {
+      await supabase.from('engagement_events').insert({
+        event_type: eventType,
+        member_id: memberId,
+        virtual_profile_id: virtualProfileId,
+        meta,
+      });
+    } catch {
+      // tablo kurulmamışsa akışı bozma
+    }
+  }
+
+  async function fetchEngagementInsights() {
+    if (!isAdmin) return;
+    const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString();
+    let rows = [];
+
+    const events = await supabase
+      .from('engagement_events')
+      .select('created_at, virtual_profile_id, event_type')
+      .eq('event_type', 'member_message')
+      .gte('created_at', since);
+
+    if (!events.error && events.data?.length) {
+      rows = events.data;
+    } else {
+      const fallback = await supabase
+        .from('messages')
+        .select('created_at, virtual_profile_id, sender_role')
+        .eq('sender_role', 'member')
+        .gte('created_at', since);
+      rows = (fallback.data || []).map((r) => ({ ...r, event_type: 'member_message' }));
+    }
+
+    const hourMap = new Map();
+    const profileMap = new Map();
+    rows.forEach((row) => {
+      const d = new Date(row.created_at);
+      const h = Number.isNaN(d.getTime()) ? 0 : d.getHours();
+      hourMap.set(h, (hourMap.get(h) || 0) + 1);
+      profileMap.set(row.virtual_profile_id, (profileMap.get(row.virtual_profile_id) || 0) + 1);
+    });
+
+    const topHours = [...hourMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([hour, count]) => ({ label: `${String(hour).padStart(2, '0')}:00`, count }));
+
+    const topProfiles = [...profileMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([profileId, count]) => ({
+        name: profileById[profileId]?.name || 'Bilinmeyen Profil',
+        count,
+      }));
+
+    setEngagementInsights({ topHours, topProfiles });
+  }
+
+  async function fetchAdminStats() {
+    if (!isAdmin) return;
+    const start = new Date();
+    if (statsRange === 'daily') {
+      start.setHours(0, 0, 0, 0);
+    } else if (statsRange === 'weekly') {
+      start.setDate(start.getDate() - 7);
+    } else {
+      start.setMonth(start.getMonth() - 1);
+    }
+    const startIso = start.toISOString();
+
+    const [{ data: todayMessages, error: msgErr }, { data: todayMembers, error: memberErr }] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('member_id, virtual_profile_id, sender_role, created_at')
+        .gte('created_at', startIso),
+      supabase
+        .from('members')
+        .select('id, created_at')
+        .gte('created_at', startIso),
+    ]);
+
+    if (msgErr || memberErr) {
+      setStatus(msgErr?.message || memberErr?.message || 'Stats alınamadı.');
+      return;
+    }
+
+    const messages = todayMessages || [];
+    const memberMessages = messages.filter((m) => m.sender_role === 'member');
+    const adminReplies = messages.filter((m) => m.sender_role === 'virtual');
+
+    const activeThreadKeys = new Set(messages.map((m) => `${m.member_id}::${m.virtual_profile_id}`));
+    const respondedThreadKeys = new Set();
+    const responseMinutes = [];
+
+    const grouped = new Map();
+    messages.forEach((m) => {
+      const key = `${m.member_id}::${m.virtual_profile_id}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(m);
+    });
+
+    grouped.forEach((rows, key) => {
+      rows.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      let lastMemberTs = null;
+      rows.forEach((row) => {
+        if (row.sender_role === 'member') {
+          lastMemberTs = row.created_at;
+        } else if (row.sender_role === 'virtual' && lastMemberTs) {
+          respondedThreadKeys.add(key);
+          const diffMin = (new Date(row.created_at).getTime() - new Date(lastMemberTs).getTime()) / 60000;
+          if (diffMin >= 0) responseMinutes.push(diffMin);
+          lastMemberTs = null;
+        }
+      });
+    });
+
+    const avgResponseMinToday = responseMinutes.length
+      ? responseMinutes.reduce((a, b) => a + b, 0) / responseMinutes.length
+      : 0;
+
+    setAdminStats({
+      totalMessagesToday: messages.length,
+      memberMessagesToday: memberMessages.length,
+      adminRepliesToday: adminReplies.length,
+      respondedThreadsToday: respondedThreadKeys.size,
+      newMembersToday: (todayMembers || []).length,
+      activeThreadsToday: activeThreadKeys.size,
+      avgResponseMinToday,
+    });
   }
 
   async function fetchThreadMessages(memberId, profileId) {
@@ -645,6 +874,63 @@ export default function App() {
       .eq('seen_by_admin', false);
   }
 
+  async function fetchQuickFacts(memberId, profileId) {
+    const { data, error } = await supabase
+      .from('thread_quick_facts')
+      .select('notes')
+      .eq('member_id', memberId)
+      .eq('virtual_profile_id', profileId)
+      .maybeSingle();
+    if (error) return;
+    setQuickFactsText(data?.notes || '');
+  }
+
+  async function fetchMemberProfile(memberId) {
+    const { data, error } = await supabase
+      .from('member_profiles')
+      .select('age, hobbies, city, photo_url, status_emoji')
+      .eq('member_id', memberId)
+      .maybeSingle();
+    if (error) return setSelectedMemberProfile(null);
+    setSelectedMemberProfile(data || null);
+  }
+
+  async function saveQuickFacts() {
+    if (!selectedThread) return;
+    const { error } = await supabase
+      .from('thread_quick_facts')
+      .upsert({
+        member_id: selectedThread.member_id,
+        virtual_profile_id: selectedThread.virtual_profile_id,
+        notes: quickFactsText,
+      }, { onConflict: 'member_id,virtual_profile_id' });
+    if (error) return setStatus(error.message);
+    setStatus('Quick Facts kaydedildi.');
+  }
+
+  async function fetchRegisteredMembers() {
+    setLoadingMembers(true);
+    const { data, error } = await supabase
+      .from('members')
+      .select('id, username, created_at')
+      .order('created_at', { ascending: false });
+    setLoadingMembers(false);
+    if (error) return setStatus(error.message);
+    setRegisteredMembers(data || []);
+  }
+
+  async function deleteMember(memberId) {
+    const { error } = await supabase.from('members').delete().eq('id', memberId);
+    if (error) return setStatus(error.message);
+    setRegisteredMembers((prev) => prev.filter((m) => m.id !== memberId));
+    setStatus('Kullanıcı silindi.');
+  }
+
+  function openChatWithProfile(profileId) {
+    setSelectedProfileId(profileId);
+    setUserView('chat');
+  }
+
   async function sendAdminReply() {
     if (!selectedThread || !adminReply.trim()) return;
     const { error } = await supabase.from('messages').insert({
@@ -656,10 +942,12 @@ export default function App() {
       seen_by_admin: true,
     });
     if (error) return setStatus(error.message);
+    recordEngagement('admin_reply', selectedThread.member_id, selectedThread.virtual_profile_id, { source: 'admin_reply' });
     setAdminReply('');
     setAiSuggestions([]);
     fetchIncomingThreads();
     fetchThreadMessages(selectedThread.member_id, selectedThread.virtual_profile_id);
+    fetchEngagementInsights();
     setStatus('Yanıt gönderildi.');
   }
 
@@ -758,16 +1046,35 @@ export default function App() {
   }
 
   return (
-    <div className="layout">
-      <header className="topbar">
+    <div className={`layout ${isAdmin ? 'layout-admin' : ''}`}>
+      <header className={`topbar ${isAdmin ? 'topbar-admin' : ''}`}>
         <h1 className="brand"><span className="brand-icon">✦</span> Flort Chat</h1>
-        {!loggedIn && (
-          <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
-            {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
-          </button>
-        )}
-        {loggedIn && <button onClick={signOut}>Çıkış</button>}
+        <div className="topbar-actions">
+          {isAdmin && loggedIn && (
+            <div className="admin-nav-pills">
+              <button type="button" className={`nav-pill ${adminTab === 'chat' ? 'active' : ''}`} onClick={() => setAdminTab('chat')}>Chat</button>
+              <button type="button" className={`nav-pill ${adminTab === 'stats' ? 'active' : ''}`} onClick={() => setAdminTab('stats')}>Stats</button>
+              <button type="button" className={`nav-pill ${adminTab === 'settings' ? 'active' : ''}`} onClick={() => setAdminTab('settings')}>Settings</button>
+            </div>
+          )}
+          {!loggedIn && (
+            <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
+              {mode === 'user' ? 'Admin girişi' : 'Kullanıcı girişi'}
+            </button>
+          )}
+          {loggedIn && <button onClick={handleSignOut}>Çıkış</button>}
+        </div>
       </header>
+
+      {loggedIn && !isAdmin && (
+        <section className="user-nav-strip card">
+          <button type="button" onClick={() => setUserView('discover')}>Keşfet</button>
+          <button type="button" onClick={() => setUserView('chat')}>Mesaj Kutusu</button>
+          <span className="mini-stat">👍 {Object.values(likedProfiles).filter(Boolean).length}</span>
+          <span className="mini-stat">💘 {Object.values(heartedProfiles).filter(Boolean).length}</span>
+          <span className="mini-stat">👋 {Object.values(wavedProfiles).filter(Boolean).length}</span>
+        </section>
+      )}
 
       {!loggedIn ? (
         <section className="auth-hero">
@@ -800,14 +1107,27 @@ export default function App() {
           </div>
         </section>
       ) : isAdmin ? (
-        <main className="admin-modern compact-shell">
+        <main className="admin-modern compact-shell admin-ops">
           <aside className="admin-left card">
-            <div className="panel-title-row">
+            {selectedThread && (
+              <div className="meta selected-profile-meta left-profile-meta">
+                <h4>Aktif Konuşan Kullanıcı</h4>
+                {selectedMemberProfile?.photo_url && <img src={selectedMemberProfile.photo_url} alt={selectedThread.member_username} className="profile-photo" />}
+                <p><strong>Kullanıcı Adı:</strong> {selectedThread.member_username}</p>
+                <p><strong>Yaş:</strong> {selectedMemberProfile?.age || '-'}</p>
+                <p><strong>Şehir:</strong> {selectedMemberProfile?.city || '-'}</p>
+                <p><strong>Hobiler:</strong> {selectedMemberProfile?.hobbies || '-'}</p>
+                <p><strong>Durum:</strong> {selectedMemberProfile?.status_emoji || '🙂'}</p>
+              </div>
+            )}
+
+            <div className="panel-title-row panel-head">
               <h3>Mesaj Bekleyen Thread'ler</h3>
             </div>
             <div className="thread-queue modern-thread-queue" ref={threadQueueRef}>
-              {incomingThreads.map((thread) => {
+              {sortedIncomingThreads.map((thread) => {
                 const threadProfile = profileById[thread.virtual_profile_id];
+                const waitingReply = thread.last_sender_role === 'member';
                 return (
                   <button
                     key={`${thread.member_id}-${thread.virtual_profile_id}`}
@@ -835,6 +1155,7 @@ export default function App() {
                     <span className="thread-copy">
                       <strong>{thread.member_username} → {thread.virtual_name}</strong>
                       {thread.last_message_content && <small>{thread.last_message_content}</small>}
+                      {waitingReply && <small className="pending-badge">Cevap bekliyor</small>}
                       {adminTypingByThread[threadKey(thread.member_id, thread.virtual_profile_id)] && <small>• yazıyor...</small>}
                     </span>
                     {adminUnreadByThread[threadKey(thread.member_id, thread.virtual_profile_id)] > 0 && (
@@ -848,7 +1169,23 @@ export default function App() {
             <div className="meta">
               <h4>SLA Paneli</h4>
               <p><strong>Cevaplanmamış thread:</strong> {slaStats.waitingCount}</p>
-              <p><strong>Ort. bekleme süresi:</strong> {slaStats.avgWaitMin.toFixed(1)} dk</p>
+              <p><strong>Ort. bekleme süresi:</strong> {slaStats.avgWaitMin > 0 && slaStats.avgWaitMin < 1 ? '<1 dk' : `${slaStats.avgWaitMin.toFixed(1)} dk`}</p>
+            </div>
+
+            <div className="meta">
+              <h4>Engagement (7 Gün)</h4>
+              <p><strong>Yoğun saatler:</strong></p>
+              <ul className="insight-list">
+                {engagementInsights.topHours.map((h) => (
+                  <li key={h.label}>{h.label} → {h.count} mesaj</li>
+                ))}
+              </ul>
+              <p><strong>İlgi gören profiller:</strong></p>
+              <ul className="insight-list">
+                {engagementInsights.topProfiles.map((p) => (
+                  <li key={p.name}>{p.name} → {p.count} etkileşim</li>
+                ))}
+              </ul>
             </div>
 
             <div className="meta">
@@ -863,56 +1200,181 @@ export default function App() {
           </aside>
 
           <section className="admin-center card">
-            <div className="chat-header">
-              <div>
-                <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
-                <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
-              </div>
-              <select value={selectedThread?.status_tag || 'takip_edilecek'} onChange={(e) => updateSelectedThreadTag(e.target.value)} style={{ width: 'auto' }}>
-                {THREAD_TAGS.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
-              </select>
-              <button type="button" className="drawer-toggle" onClick={() => setAdminDrawerOpen((v) => !v)}>
-                {adminDrawerOpen ? 'Paneli Gizle' : 'Paneli Aç'}
-              </button>
-            </div>
-
-            <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
-              {threadMessages.map((msg) => {
-                const audioUrl = getAudioUrl(msg.content);
-                return (
-                  <div key={msg.id} className={`msg ${msg.sender_role}`}>
-                    <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>
-                    {audioUrl ? <audio controls src={audioUrl} className="audio-player" /> : <p>{msg.content}</p>}
-                    <small>
-                      {formatTime(msg.created_at)}
-                      {msg.sender_role === 'virtual' ? <span className={`ticks ${msg.seen_by_member ? 'seen' : ''}`} title={msg.seen_by_member_at ? `Görüldü: ${formatTime(msg.seen_by_member_at)}` : `Teslim: ${formatTime(msg.created_at)}`}>✓✓</span> : ''}
-                    </small>
+            {adminTab === 'chat' && (
+              <>
+                <div className="chat-header admin-center-head">
+                  <div>
+                    <h3>{selectedThread?.virtual_name || 'Sohbet seç'}</h3>
+                    <small>{selectedThreadProfile && onlineProfiles[selectedThreadProfile.id] ? 'Online' : 'Offline'}</small>
                   </div>
-                );
-              })}
-            </div>
+                  <select value={selectedThread?.status_tag || 'takip_edilecek'} onChange={(e) => updateSelectedThreadTag(e.target.value)} style={{ width: 'auto' }}>
+                    {THREAD_TAGS.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                  </select>
+                  <button type="button" className="drawer-toggle" onClick={() => setAdminDrawerOpen((v) => !v)}>
+                    {adminDrawerOpen ? 'Paneli Gizle' : 'Paneli Aç'}
+                  </button>
+                </div>
 
-            <div className="quick-replies">
-              {QUICK_REPLIES.map((reply) => (
-                <button key={reply} type="button" className="chip" onClick={() => setAdminReply((prev) => `${prev ? `${prev}
-` : ''}${reply}`)}>{reply}</button>
-              ))}
-              <button type="button" className="chip ai" onClick={fetchAiSuggestions} disabled={loadingSuggestions}>{loadingSuggestions ? 'AI düşünüyor...' : 'AI Önerisi Getir'}</button>
-            </div>
+                <div className="chat-box admin-chat-box" ref={adminChatBoxRef}>
+                  {threadMessages.map((msg) => {
+                    const audioUrl = getAudioUrl(msg.content);
+                    return (
+                      <div key={msg.id} className={`msg ${msg.sender_role}`}>
+                        <span>{msg.sender_role === 'member' ? selectedThread?.member_username : selectedThread?.virtual_name}</span>
+                        {audioUrl ? <audio controls src={audioUrl} className="audio-player" /> : <p>{msg.content}</p>}
+                        <small>
+                          {formatTime(msg.created_at)}
+                          {msg.sender_role === 'virtual' ? <span className={`ticks ${msg.seen_by_member ? 'seen' : ''}`} title={msg.seen_by_member_at ? `Görüldü: ${formatTime(msg.seen_by_member_at)}` : `Teslim: ${formatTime(msg.created_at)}`}>✓✓</span> : ''}
+                        </small>
+                      </div>
+                    );
+                  })}
+                </div>
 
-            {!!aiSuggestions.length && (
-              <div className="ai-suggestions">
-                {aiSuggestions.map((suggestion) => (
-                  <button key={suggestion} type="button" className="chip" onClick={() => setAdminReply(suggestion)}>{suggestion}</button>
-                ))}
+                <div className="quick-replies">
+                  {QUICK_REPLIES.map((reply) => (
+                    <button key={reply} type="button" className="chip" onClick={() => setAdminReply((prev) => `${prev ? `${prev}\n` : ''}${reply}`)}>{reply}</button>
+                  ))}
+                  <button type="button" className="chip ai" onClick={fetchAiSuggestions} disabled={loadingSuggestions}>{loadingSuggestions ? 'AI düşünüyor...' : 'AI Önerisi Getir'}</button>
+                </div>
+
+                {!!aiSuggestions.length && (
+                  <div className="ai-suggestions">
+                    {aiSuggestions.map((suggestion) => (
+                      <button key={suggestion} type="button" className="chip" onClick={() => setAdminReply(suggestion)}>{suggestion}</button>
+                    ))}
+                  </div>
+                )}
+
+                <textarea
+                  className="grow-textarea"
+                  placeholder="Sanal profil cevabı"
+                  value={adminReply}
+                  onChange={(e) => {
+                    setAdminReply(e.target.value);
+                    autoResizeTextarea(e.target, 260);
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }}
+                />
+                <button onClick={sendAdminReply}>Yanıt Gönder</button>
+              </>
+            )}
+
+            {adminTab === 'stats' && (
+              <div className="stats-dashboard">
+                <h3>Stats Dashboard ({statsRange === 'daily' ? 'Günlük' : statsRange === 'weekly' ? 'Haftalık' : 'Aylık'})</h3>
+                <div className="stats-range-switch">
+                  <button type="button" className={statsRange === 'daily' ? 'active' : ''} onClick={() => setStatsRange('daily')}>Günlük</button>
+                  <button type="button" className={statsRange === 'weekly' ? 'active' : ''} onClick={() => setStatsRange('weekly')}>Haftalık</button>
+                  <button type="button" className={statsRange === 'monthly' ? 'active' : ''} onClick={() => setStatsRange('monthly')}>Aylık</button>
+                </div>
+                <div className="stats-grid">
+                  <div className="meta stat-card"><small>Toplam Mesaj</small><strong>{adminStats.totalMessagesToday}</strong></div>
+                  <div className="meta stat-card"><small>Üye Mesajı</small><strong>{adminStats.memberMessagesToday}</strong></div>
+                  <div className="meta stat-card"><small>Admin Cevabı</small><strong>{adminStats.adminRepliesToday}</strong></div>
+                  <div className="meta stat-card"><small>Cevaplanan Thread</small><strong>{adminStats.respondedThreadsToday}</strong></div>
+                  <div className="meta stat-card"><small>Yeni Üye Kaydı</small><strong>{adminStats.newMembersToday}</strong></div>
+                  <div className="meta stat-card"><small>Aktif Thread</small><strong>{adminStats.activeThreadsToday}</strong></div>
+                  <div className="meta stat-card"><small>Ort. Cevap Süresi</small><strong>{adminStats.avgResponseMinToday.toFixed(1)} dk</strong></div>
+                </div>
+
+                <div className="stats-lists">
+                  <div className="meta">
+                    <p><strong>Yoğun Saatler</strong></p>
+                    <ul className="insight-list">
+                      {engagementInsights.topHours.map((h) => <li key={h.label}>{h.label} → {h.count}</li>)}
+                    </ul>
+                  </div>
+                  <div className="meta">
+                    <p><strong>En Çok İlgi Gören Profiller</strong></p>
+                    <ul className="insight-list">
+                      {engagementInsights.topProfiles.map((p) => <li key={p.name}>{p.name} → {p.count}</li>)}
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
 
-            <textarea placeholder="Sanal profil cevabı" value={adminReply} onChange={(e) => setAdminReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} />
-            <button onClick={sendAdminReply}>Yanıt Gönder</button>
+            {adminTab === 'settings' && (
+              <div className="settings-page">
+                <div className="meta">
+                  <h3>Settings</h3>
+                  <label className="toggle-row">
+                    <span>Bildirim sesi</span>
+                    <input
+                      type="checkbox"
+                      checked={notificationSoundEnabled}
+                      onChange={(e) => setNotificationSoundEnabled(e.target.checked)}
+                    />
+                  </label>
+                </div>
+
+                <div className="meta">
+                  <div className="panel-title-row panel-divider">
+                    <h3>Sanal Profil Oluştur</h3>
+                    <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
+                  </div>
+
+                  <label className="floating-field">
+                    <input placeholder=" " value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
+                    <span>Ad (boşsa otomatik)</span>
+                  </label>
+                  <label className="floating-field">
+                    <input placeholder=" " type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
+                    <span>Yaş (boşsa otomatik)</span>
+                  </label>
+                  <label className="floating-field">
+                    <input placeholder=" " value={profileForm.city} onChange={(e) => setProfileForm((s) => ({ ...s, city: e.target.value }))} />
+                    <span>Şehir (boşsa otomatik)</span>
+                  </label>
+                  <label className="floating-field">
+                    <input placeholder=" " value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
+                    <span>Cinsiyet</span>
+                  </label>
+                  <label className="floating-field">
+                    <textarea placeholder=" " value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
+                    <span>Hobiler</span>
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const url = await uploadImage(file, 'virtual-profiles');
+                      if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
+                    }}
+                  />
+                  {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
+
+                  <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
+                </div>
+
+                <div className="meta">
+                  <h3>Kayıt Olan Kullanıcılar</h3>
+                  {loadingMembers ? (
+                    <p>Yükleniyor...</p>
+                  ) : (
+                    <div className="member-list">
+                      {registeredMembers.map((member) => (
+                        <div key={member.id} className="member-row">
+                          <div>
+                            <strong>{member.username}</strong>
+                            <small>{new Date(member.created_at).toLocaleString('tr-TR')}</small>
+                          </div>
+                          <button type="button" className="danger-btn" onClick={() => deleteMember(member.id)}>Sil</button>
+                        </div>
+                      ))}
+                      {!registeredMembers.length && <p>Kayıtlı kullanıcı yok.</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
-          {adminDrawerOpen && (
+          {adminDrawerOpen && adminTab === 'chat' && (
             <aside className="admin-right card drawer-panel">
               {selectedThreadProfile && (
                 <div className="meta selected-profile-meta">
@@ -925,50 +1387,70 @@ export default function App() {
                 </div>
               )}
 
-              <div className="panel-title-row panel-divider">
-                <h3>Sanal Profil Oluştur</h3>
-                <button type="button" className="icon-dice" onClick={fillRandomVirtualProfile} aria-label="Rastgele üret">🎲</button>
+              <div className="meta">
+                <h4>Quick Facts</h4>
+                <textarea
+                  placeholder="Kullanıcı hakkında önemli notlar (şehir, iş, sınırlar, tercih vb.)"
+                  value={quickFactsText}
+                  onChange={(e) => setQuickFactsText(e.target.value)}
+                />
+                <button onClick={saveQuickFacts}>Quick Facts Kaydet</button>
               </div>
 
-              <label className="floating-field">
-                <input placeholder=" " value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
-                <span>Ad (boşsa otomatik)</span>
-              </label>
-              <label className="floating-field">
-                <input placeholder=" " type="number" value={profileForm.age} onChange={(e) => setProfileForm((s) => ({ ...s, age: e.target.value }))} />
-                <span>Yaş (boşsa otomatik)</span>
-              </label>
-              <label className="floating-field">
-                <input placeholder=" " value={profileForm.city} onChange={(e) => setProfileForm((s) => ({ ...s, city: e.target.value }))} />
-                <span>Şehir (boşsa otomatik)</span>
-              </label>
-              <label className="floating-field">
-                <input placeholder=" " value={profileForm.gender} onChange={(e) => setProfileForm((s) => ({ ...s, gender: e.target.value }))} />
-                <span>Cinsiyet</span>
-              </label>
-              <label className="floating-field">
-                <textarea placeholder=" " value={profileForm.hobbies} onChange={(e) => setProfileForm((s) => ({ ...s, hobbies: e.target.value }))} />
-                <span>Hobiler</span>
-              </label>
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const url = await uploadImage(file, 'virtual-profiles');
-                  if (url) setProfileForm((s) => ({ ...s, photo_url: url }));
-                }}
-              />
-              {profileForm.photo_url && <img src={profileForm.photo_url} alt="Önizleme" className="upload-preview" />}
-
-              <button onClick={createVirtualProfile}>Kaydet (Foto + Otomatik İsim/Şehir/Yaş)</button>
             </aside>
           )}
         </main>
+      ) : userView === 'discover' ? (
+        <main className="dashboard compact-shell discover-shell">
+          <section className="card discover-hero">
+            <h2>Discover 2026 ✨</h2>
+            <p>Şehir, cinsiyet ve ilgi alanlarına göre profilleri keşfet. Hızlı aksiyonlarla sohbet başlat.</p>
+            <div className="discover-filters">
+              <input placeholder="Şehir ara" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} />
+              <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)}>
+                <option value="all">Tümü</option>
+                <option value="Kadın">Kadın</option>
+                <option value="Erkek">Erkek</option>
+              </select>
+              <input placeholder="İsim / hobi ara" value={profileSearch} onChange={(e) => setProfileSearch(e.target.value)} />
+              <select value={discoverSort} onChange={(e) => setDiscoverSort(e.target.value)}>
+                <option value="match">Uyuma Göre</option>
+                <option value="online">Online</option>
+                <option value="newest">Yeni Eklenen</option>
+                <option value="age_asc">Yaş (Artan)</option>
+              </select>
+              <button type="button" onClick={() => setUserView('chat')}>Mesaj Kutuma Git</button>
+            </div>
+            <div className="discover-meta-row">
+              <span className="mini-pill">{discoverProfiles.length} profil bulundu</span>
+              <span className="mini-pill">Trend: kısa mesaj + hızlı etkileşim</span>
+            </div>
+          </section>
+
+          <section className="discover-grid">
+            {discoverProfiles.map((profile) => (
+              <article key={profile.id} className="card discover-card">
+                <div className="discover-topline">
+                  <span className={`online-dot ${displayOnlineProfiles[profile.id] ? 'on' : ''}`} />
+                  <span>{displayOnlineProfiles[profile.id] ? 'Online' : 'Offline'}</span>
+                  <span className="verified-pill">✔ doğrulandı</span>
+                </div>
+                {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="discover-photo" /> : <div className="discover-photo-fallback">{profile.name?.slice(0, 1)}</div>}
+                <h3>{profile.name}, {profile.age}</h3>
+                <p>{profile.city || 'Türkiye'} • {profile.gender || '-'}</p>
+                <small className="discover-hobbies">{profile.hobbies || 'Hobi bilgisi yok.'}</small>
+                <div className="discover-actions">
+                  <button type="button" onClick={() => { setHeartedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'heart'); }}>{heartedProfiles[profile.id] ? '💘 Kalp Atıldı' : '💘 Kalp At'}</button>
+                  <button type="button" onClick={() => { setWavedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'wave'); }}>{wavedProfiles[profile.id] ? '👋 El Sallandı' : '👋 El Salla'}</button>
+                  <button type="button" onClick={() => { setLikedProfiles((s) => ({ ...s, [profile.id]: !s[profile.id] })); sendReaction(profile.id, 'like'); }}>{likedProfiles[profile.id] ? '👍 Beğenildi' : '👍 Beğen'}</button>
+                  <button type="button" className="cta-message" onClick={() => openChatWithProfile(profile.id)}>Mesaj At</button>
+                </div>
+              </article>
+            ))}
+          </section>
+        </main>
       ) : (
-        <main className="dashboard user-grid user-dashboard compact-shell">
+        <main className="dashboard user-grid user-dashboard user-chat-layout compact-shell">
           <aside className="card">
             <h3>Sohbetler</h3>
             <div className="profile-list" ref={profileListRef}>
@@ -981,7 +1463,7 @@ export default function App() {
                     <strong>{profile.name}</strong>
                     <small>{profile.city || 'Türkiye'}</small>
                   </span>
-                  <span className={`online-dot ${onlineProfiles[profile.id] ? 'on' : ''}`} />
+                  <span className={`online-dot ${displayOnlineProfiles[profile.id] ? 'on' : ''}`} />
                   {unreadByProfile[profile.id] > 0 && <small>Yeni ({unreadByProfile[profile.id]})</small>}
                 </button>
               ))}
@@ -1016,7 +1498,16 @@ export default function App() {
             </div>
             {typingLabel && <div className="typing-indicator">{typingLabel}</div>}
             <div className="row">
-              <input placeholder="Mesaj yaz" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }} />
+              <textarea
+                className="grow-textarea"
+                placeholder="Mesaj yaz"
+                value={newMessage}
+                onChange={(e) => {
+                  setNewMessage(e.target.value);
+                  autoResizeTextarea(e.target, 220);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              />
               <button onClick={sendMessage}>Gönder</button>
             </div>
           </section>
