@@ -1,4 +1,4 @@
-# Flort Chat (Vite + Supabase)
+# AkorCenneti (Vite + Supabase)
 
 Bu proje, üyelerin yalnızca admin tarafından yaratılan **sanal profillerle** sohbet ettiği bir uygulamadır.
 

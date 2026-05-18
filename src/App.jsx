@@ -389,7 +389,7 @@ export default function App() {
   return (
     <div className="layout">
       <header>
-        <h1>💬 Flort Chat</h1>
+        <h1>🎸 AkorCenneti</h1>
         <div>
           {!session && (
             <button className="linkish" onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}>
